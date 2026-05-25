@@ -60,3 +60,33 @@ def test_jelinek_bs_vectorized_and_monotone():
     r = jelinek_bs(theta=theta, pd=2.0)
     assert r.shape == theta.shape
     assert np.all(np.diff(r) >= -1e-9)
+
+
+from mango_explorer.boundaries import tessellate_surface
+
+
+def test_tessellate_returns_positions_and_indices():
+    def r_of_theta(theta):
+        return shue_mp(theta, r0=10.5, alpha=0.6)
+
+    pos, idx = tessellate_surface(r_of_theta, n_theta=20, n_phi=24, theta_max=math.pi * 0.85)
+    # Float32 vertices (N, 3), Uint32 indices (M, 3)
+    assert pos.dtype == np.float32
+    assert idx.dtype == np.uint32
+    assert pos.shape[1] == 3
+    assert idx.shape[1] == 3
+    # n_theta rings * n_phi meridians
+    assert pos.shape[0] == 20 * 24
+    # Two triangles per quad cell
+    assert idx.shape[0] == (20 - 1) * 24 * 2
+
+
+def test_tessellate_subsolar_point_lies_on_x_axis():
+    def r_of_theta(theta):
+        return shue_mp(theta, r0=10.5, alpha=0.6)
+
+    pos, _ = tessellate_surface(r_of_theta, n_theta=10, n_phi=8, theta_max=math.pi * 0.85)
+    # First ring (theta=0) is exactly the subsolar point — all vertices at (10.5, 0, 0)
+    first_ring = pos[:8]
+    np.testing.assert_allclose(first_ring[:, 0], 10.5, atol=1e-5)
+    np.testing.assert_allclose(first_ring[:, 1:], 0.0, atol=1e-5)
