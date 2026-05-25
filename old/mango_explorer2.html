@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MANGO Explorer - Event Catalogs</title>
+    <style>
+        body { margin: 0; background: #010103; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; }
+        
+        /* Sidebar Styles */
+        #sidebar { width: 280px; background: rgba(15, 15, 25, 0.95); border-right: 1px solid #3a3a4a; height: 100vh; padding: 20px; box-sizing: border-box; z-index: 20; backdrop-filter: blur(10px); }
+        #viewport-container { flex-grow: 1; position: relative; }
+        
+        h1 { font-size: 14px; color: #ffab00; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        h2 { font-size: 11px; color: #888; text-transform: uppercase; margin: 15px 0 10px 0; }
+        
+        /* Tree Widget Styles */
+        .tree-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 13px; cursor: pointer; user-select: none; }
+        .tree-item input { margin-right: 10px; cursor: pointer; }
+        .folder-icon { margin-right: 8px; color: #ffab00; font-size: 16px; }
+        .catalog-label { flex-grow: 1; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-left: 5px; }
+
+        /* UI Panel on Right */
+        #params-panel { position: absolute; top: 15px; right: 15px; background: rgba(10, 10, 20, 0.8); padding: 15px; border-radius: 12px; border: 1px solid #3a3a4a; width: 220px; }
+        label { font-size: 10px; color: #aaa; display: block; margin-bottom: 3px; }
+        input[type=range] { width: 100%; margin-bottom: 10px; }
+        
+        #view-controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; background: rgba(0,0,0,0.6); padding: 8px; border-radius: 50px; }
+        button { background: #1a1a1a; color: #ccc; border: 1px solid #444; padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 11px; }
+        button:hover { background: #ffab00; color: #000; }
+    </style>
+</head>
+<body>
+
+<!-- À ajouter dans le body -->
+<div id="event-popup">
+    <div id="popup-header">
+        <span id="popup-title">Event ID</span>
+        <button onclick="closePopup()">×</button>
+    </div>
+    <div id="popup-content">
+        <p><strong>Date:</strong> <span id="popup-date"></span></p>
+        <p><strong>Pos (GSE):</strong> <span id="popup-pos"></span></p>
+        <p><strong>Paper:</strong> <a id="popup-link" href="#" target="_blank">View Article</a></p>
+    </div>
+</div>
+
+<style>
+/* Style type HUD Sci-fi */
+#event-popup {
+    display: none; /* Caché par défaut */
+    position: absolute;
+    top: 20px; right: 20px; /* Position par défaut, sera changée par JS */
+    width: 280px;
+    background: rgba(10, 15, 30, 0.95);
+    border: 1px solid #00d2ff;
+    box-shadow: 0 0 15px rgba(0, 210, 255, 0.3);
+    color: #e0e0e0;
+    font-family: 'Segoe UI', monospace;
+    z-index: 100;
+    backdrop-filter: blur(5px);
+}
+
+#popup-header {
+    background: rgba(0, 210, 255, 0.2);
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #00d2ff;
+}
+
+#popup-title { font-weight: bold; color: #00d2ff; }
+#popup-header button { background: none; border: none; color: white; font-size: 16px; cursor: pointer; }
+
+#popup-content { padding: 15px; font-size: 13px; line-height: 1.6; }
+#popup-link { color: #ffab00; text-decoration: none; border-bottom: 1px dotted #ffab00; }
+#popup-link:hover { color: #fff; }
+</style>
+
+
+
+<div id="sidebar">
+    <h1>Mango Explorer</h1>
+    
+    <h2>Event Catalogs (COCAT)</h2>
+    <div id="catalog-tree">
+        <div class="tree-item">
+            <input type="checkbox" id="cat-mms" onchange="toggleCatalog('mms', this.checked)">
+            <span class="folder-icon">📁</span>
+            <span class="catalog-label">MMS Reconnection</span>
+            <span class="dot" style="background: #ff00ff;"></span>
+        </div>
+        <div class="tree-item">
+            <input type="checkbox" id="cat-themis" onchange="toggleCatalog('themis', this.checked)">
+            <span class="folder-icon">📁</span>
+            <span class="catalog-label">THEMIS MP Crossings</span>
+            <span class="dot" style="background: #00ff00;"></span>
+        </div>
+        <div class="tree-item">
+            <input type="checkbox" id="cat-cluster" onchange="toggleCatalog('cluster', this.checked)">
+            <span class="folder-icon">📁</span>
+            <span class="catalog-label">Cluster Shock Events</span>
+            <span class="dot" style="background: #ffff00;"></span>
+        </div>
+    </div>
+
+    <h2>System Settings</h2>
+    <div class="tree-item">
+        <input type="checkbox" checked onchange="window.toggleBoundaries(this.checked)">
+        <span class="catalog-label">Show Model Shells</span>
+    </div>
+</div>
+
+<div id="viewport-container">
+    <div id="params-panel">
+        <!-- À mettre dans la div #params-panel -->
+<label>MP Standoff ($R_E$)</label>
+<input type="range" id="mpR0" min="6" max="15" step="0.1" value="10.5">
+<div id="valR0" style="text-align:right; font-size:10px; color:#ffab00;">10.5 Re</div>
+
+    </div>
+
+    <div id="view-controls">
+        <button onclick="window.snapView('XY')">XY</button>
+        <button onclick="window.snapView('XZ')">XZ</button>
+        <button onclick="window.snapView('YZ')">YZ</button>
+    </div>
+</div>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+</script>
+
+
+<script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+
+    // --- CONFIGURATION SCÈNE ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x010103);
+    
+    // Taille zone de rendu (Fenêtre moins Sidebar)
+    const sidebarWidth = 280;
+    const canvasWidth = window.innerWidth - sidebarWidth;
+    const canvasHeight = window.innerHeight;
+
+    const camera = new THREE.PerspectiveCamera(50, canvasWidth / canvasHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(canvasWidth, canvasHeight);
+    renderer.localClippingEnabled = true;
+    document.getElementById('viewport-container').appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    camera.position.set(40, 30, 40);
+
+    // --- AXES ET CONTEXTE ---
+    const axesHelper = new THREE.AxesHelper(30);
+    scene.add(axesHelper);
+    
+    const earthGeo = new THREE.SphereGeometry(1, 16, 16);
+    const earthMat = new THREE.MeshBasicMaterial({ color: 0x2233ff, wireframe: true });
+    scene.add(new THREE.Mesh(earthGeo, earthMat));
+
+    // --- GESTION DES DONNÉES MULTI-CATALOGUE ---
+    // On stocke les objets 3D et les données par clé ('mms', 'themis', etc.)
+    const catalogMeshes = {}; 
+    const catalogData = {};   
+    
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    
+    // Références biblio simulées
+    const mangoRefs = [
+        { title: "Burch et al. 2016 (Science)", url: "https://doi.org/10.1126/science.aaf2939" },
+        { title: "Phan et al. 2018 (Nature)", url: "https://www.nature.com/articles/s41586-018-0091-5" },
+        { title: "Torbert et al. 2018 (Science)", url: "https://doi.org/10.1126/science.aat2998" }
+    ];
+
+    // --- GESTION DES FRONTIÈRES (MP & BS) ---
+    // (Code inchangé pour la géométrie MP/BS)
+    let mpMesh, mpWire, bsMesh, bsWire;
+    const boundaryGroup = new THREE.Group();
+
+    function createBoundaryMesh(color, opacity, isWireframe) {
+        const geom = new THREE.BufferGeometry();
+        const resTheta = 60; const resPhi = 60;
+        const count = (resTheta + 1) * (resPhi + 1);
+        geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+        
+        const indices = [];
+        for (let i = 0; i < resTheta; i++) {
+            for (let j = 0; j < resPhi; j++) {
+                const a = i * (resPhi + 1) + j;
+                const b = a + resPhi + 1;
+                indices.push(a, b, a + 1);
+                indices.push(b, b + 1, a + 1);
+            }
+        }
+        geom.setIndex(indices);
+
+        const mat = new THREE.MeshBasicMaterial({ 
+            color: color, wireframe: isWireframe, transparent: true, 
+            opacity: opacity, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+            depthWrite: isWireframe 
+        });
+        return new THREE.Mesh(geom, mat);
+    }
+
+    function updateGeometryData(geometry, r0, alpha, isShock) {
+        const resTheta = 60; const resPhi = 60;
+        const thetaLimit = isShock ? Math.PI * 0.75 : Math.PI * 0.85;
+        const positions = geometry.attributes.position.array;
+        
+        let index = 0;
+        for (let i = 0; i <= resTheta; i++) {
+            const theta = (i / resTheta) * thetaLimit;
+            let r;
+            if (isShock) {
+                const rShock = r0 * 1.35; 
+                const epsilon = 1.05; 
+                r = (rShock * (1 + epsilon)) / (1 + epsilon * Math.cos(theta));
+            } else {
+                r = r0 * Math.pow(2 / (1 + Math.cos(theta)), alpha);
+            }
+            for (let j = 0; j <= resPhi; j++) {
+                const phi = (j / resPhi) * Math.PI * 2;
+                positions[index++] = r * Math.cos(theta); // x
+                positions[index++] = r * Math.sin(theta) * Math.cos(phi); // y
+                positions[index++] = r * Math.sin(theta) * Math.sin(phi); // z
+            }
+        }
+        geometry.attributes.position.needsUpdate = true;
+        geometry.computeVertexNormals();
+    }
+
+    // Init Meshes
+    mpMesh = createBoundaryMesh(0x00aaff, 0.25, false);
+    mpWire = createBoundaryMesh(0x00ffff, 0.1, true);
+    bsMesh = createBoundaryMesh(0xffaa00, 0.15, false);
+    bsWire = createBoundaryMesh(0xffaa00, 0.1, true);
+    boundaryGroup.add(mpMesh, mpWire, bsMesh, bsWire);
+    scene.add(boundaryGroup);
+    [mpMesh, mpWire].forEach(m => updateGeometryData(m.geometry, 10.5, 0.6, false));
+    [bsMesh, bsWire].forEach(m => updateGeometryData(m.geometry, 10.5, 0.6, true));
+
+    // --- INTERFACE JS EXPOSÉE ---
+    
+    document.getElementById('mpR0').addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        document.getElementById('valR0').innerText = val.toFixed(1) + " Re";
+        [mpMesh, mpWire].forEach(m => updateGeometryData(m.geometry, val, 0.6, false));
+        [bsMesh, bsWire].forEach(m => updateGeometryData(m.geometry, val, 0.6, true));
+    });
+
+    window.toggleBoundaries = (v) => boundaryGroup.visible = v;
+    window.snapView = (p) => {
+        if(p==='XY') { camera.position.set(0,0,60); camera.up.set(0,1,0); }
+        if(p==='XZ') { camera.position.set(0,-60,0); camera.up.set(0,0,1); }
+        if(p==='YZ') { camera.position.set(60,0,0); camera.up.set(0,0,1); }
+        controls.target.set(0,0,0); controls.update();
+    };
+    window.closePopup = () => {
+        document.getElementById('event-popup').style.display = 'none';
+    };
+
+    // --- LOGIQUE MULTI-CATALOGUE ---
+
+    window.toggleCatalog = (type, isChecked) => {
+        // 1. Si on décoche : Supprimer le catalogue spécifique
+        if (!isChecked) {
+            if (catalogMeshes[type]) {
+                scene.remove(catalogMeshes[type]);
+                catalogMeshes[type].geometry.dispose();
+                catalogMeshes[type].material.dispose();
+                delete catalogMeshes[type];
+                delete catalogData[type];
+            }
+            window.closePopup();
+            return;
+        }
+
+        // 2. Si on coche : Créer le catalogue sans toucher aux autres
+        const color = type === 'mms' ? 0xff00ff : (type === 'themis' ? 0x00ff00 : 0xffff00);
+        const count = type === 'mms' ? 200 : 80;
+
+        const geometry = new THREE.BufferGeometry();
+        const positions = [];
+        const currentDataList = [];
+        
+        for (let i = 0; i < count; i++) {
+            const theta = Math.random() * Math.PI * 2;
+            const phi = (Math.random() - 0.5) * Math.PI;
+            // Différents rayons pour bien les voir ensemble
+            const baseR = type === 'mms' ? 10 : (type === 'themis' ? 12 : 15);
+            const r = baseR + (Math.random() - 0.5) * 4;
+
+            const x = r * Math.cos(phi) * Math.cos(theta);
+            const y = r * Math.cos(phi) * Math.sin(theta);
+            const z = r * Math.sin(phi);
+
+            positions.push(x, y, z);
+            
+            const randomRef = mangoRefs[Math.floor(Math.random() * mangoRefs.length)];
+            currentDataList.push({
+                id: `${type.toUpperCase()}-${i}`,
+                date: "2023-01-15", 
+                pos: [x.toFixed(1), y.toFixed(1), z.toFixed(1)],
+                paper: randomRef.title,
+                url: randomRef.url
+            });
+        }
+
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        const material = new THREE.PointsMaterial({ color: color, size: 0.8, sizeAttenuation: true });
+        
+        const mesh = new THREE.Points(geometry, material);
+        mesh.name = type; // IMPORTANT: On nomme le mesh pour l'identifier au clic
+        
+        // Stockage
+        scene.add(mesh);
+        catalogMeshes[type] = mesh;
+        catalogData[type] = currentDataList;
+    };
+
+    // --- RAYCASTING (Clic Souris Multi-objets) ---
+    raycaster.params.Points.threshold = 1.0; 
+    window.addEventListener('click', onMouseClick, false);
+
+    function onMouseClick(event) {
+        // Ignorer clic dans la sidebar
+        if (event.clientX < sidebarWidth) return;
+
+        // Calcul position souris
+        mouse.x = ((event.clientX - sidebarWidth) / (window.innerWidth - sidebarWidth)) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+
+        // On teste l'intersection avec TOUS les catalogues actifs
+        // Object.values(catalogMeshes) renvoie un tableau contenant tous les objets Points
+        const meshesToCheck = Object.values(catalogMeshes);
+        
+        if (meshesToCheck.length === 0) return;
+
+        const intersects = raycaster.intersectObjects(meshesToCheck);
+
+        if (intersects.length > 0) {
+            // intersects[0] est le plus proche
+            const hit = intersects[0];
+            const meshName = hit.object.name; // ex: 'mms'
+            const index = hit.index;
+
+            // Récupérer les données correspondantes
+            const data = catalogData[meshName][index];
+            if (data) showPopup(data, event.clientX, event.clientY);
+            
+        } else {
+            if (!event.target.closest('#event-popup')) window.closePopup();
+        }
+    }
+
+    function showPopup(data, x, y) {
+        const popup = document.getElementById('event-popup');
+        document.getElementById('popup-title').innerText = data.id;
+        document.getElementById('popup-date').innerText = data.date;
+        document.getElementById('popup-pos').innerText = `[${data.pos.join(', ')}] Re`;
+        const link = document.getElementById('popup-link');
+        link.innerText = data.paper;
+        link.href = data.url;
+        
+        let leftPos = x + 15;
+        if(leftPos + 280 > window.innerWidth) leftPos = x - 290;
+        popup.style.left = leftPos + 'px';
+        popup.style.top = (y + 15) + 'px';
+        popup.style.display = 'block';
+    }
+
+    // --- RESET UI ---
+    document.getElementById('cat-mms').checked = false;
+    document.getElementById('cat-themis').checked = false;
+    document.getElementById('cat-cluster').checked = false;
+
+    function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+    animate();
+
+</script>
+
+
+
+</body>
+</html>

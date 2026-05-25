@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MANGO Explorer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: #000; 
+            color: #fff; 
+            font-family: 'Segoe UI', sans-serif; 
+            display: flex; 
+            height: 100vh; 
+            overflow: hidden; 
+        }
+
+        /* Sidebar */
+        #sidebar {
+            width: 260px;
+            background: #0a0a12;
+            border-right: 1px solid #333;
+            padding: 20px;
+            flex-shrink: 0;
+        }
+        #sidebar h1 {
+            font-size: 14px;
+            color: #ffab00;
+            letter-spacing: 2px;
+            margin-bottom: 25px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+        }
+        #sidebar h2 {
+            font-size: 11px;
+            color: #666;
+            margin: 20px 0 10px;
+            text-transform: uppercase;
+        }
+        .item {
+            display: flex;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .item:hover { color: #ffab00; }
+        .item input { margin-right: 10px; }
+
+        /* Viewport */
+        #viewport {
+            flex: 1;
+            position: relative;
+            background: #010103;
+        }
+        #viewport canvas {
+            display: block;
+        }
+
+        /* SVG overlay for connector line */
+        #svg-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        #connector-line {
+            stroke: #00ddff;
+            stroke-width: 1.5;
+            stroke-dasharray: 4 2;
+        }
+        #connector-dot {
+            fill: #000;
+            stroke: #00ddff;
+            stroke-width: 2;
+        }
+
+        /* Popup */
+        #popup {
+            display: none;
+            position: absolute;
+            z-index: 20;
+            background: rgba(5, 10, 20, 0.95);
+            border: 1px solid #00ddff;
+            box-shadow: 0 0 20px rgba(0, 200, 255, 0.3);
+            width: 240px;
+            font-size: 12px;
+        }
+        #popup-header {
+            background: rgba(0, 200, 255, 0.1);
+            padding: 10px 12px;
+            border-bottom: 1px solid #00ddff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #popup-header span:first-child {
+            color: #00ddff;
+            font-weight: bold;
+        }
+        #popup-close {
+            cursor: pointer;
+            color: #888;
+            font-size: 16px;
+        }
+        #popup-close:hover { color: #fff; }
+        #popup-body {
+            padding: 12px;
+            line-height: 1.7;
+            color: #aaa;
+        }
+        #popup-body strong { color: #fff; }
+
+        /* Controls */
+        #controls {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 5;
+            background: rgba(0,0,0,0.7);
+            padding: 12px;
+            border: 1px solid #333;
+            border-radius: 4px;
+        }
+        #controls label {
+            display: block;
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+        #controls input[type="range"] {
+            width: 150px;
+        }
+        #r0-value {
+            color: #00aaff;
+            font-family: monospace;
+        }
+
+        /* View buttons */
+        #view-btns {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            z-index: 5;
+            display: flex;
+            gap: 5px;
+        }
+        #view-btns button {
+            background: rgba(20,20,30,0.9);
+            border: 1px solid #444;
+            color: #aaa;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        #view-btns button:hover {
+            background: #333;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h1>MANGO EXPLORER</h1>
+    
+    <h2>Event Catalogs</h2>
+    <div class="item">
+        <input type="checkbox" id="chk-mms"> 
+        <label for="chk-mms">MMS Reconnection Events</label>
+    </div>
+    <div class="item">
+        <input type="checkbox" id="chk-themis"> 
+        <label for="chk-themis">THEMIS Magnetopause</label>
+    </div>
+    <div class="item">
+        <input type="checkbox" id="chk-cluster"> 
+        <label for="chk-cluster">Cluster Cusp Crossings</label>
+    </div>
+
+    <h2>Boundaries</h2>
+    <div class="item">
+        <input type="checkbox" id="chk-boundaries" checked> 
+        <label for="chk-boundaries">Magnetopause / Bow Shock</label>
+    </div>
+</div>
+
+<div id="viewport">
+    <!-- SVG layer for connector line -->
+    <svg id="svg-overlay">
+        <line id="connector-line" x1="0" y1="0" x2="0" y2="0" style="display:none"/>
+        <circle id="connector-dot" cx="0" cy="0" r="5" style="display:none"/>
+    </svg>
+
+    <!-- R0 slider -->
+    <div id="controls">
+        <label>Magnetopause R0</label>
+        <input type="range" id="r0-slider" min="6" max="15" step="0.1" value="10.5">
+        <span id="r0-value">10.5 Re</span>
+    </div>
+
+    <!-- View buttons -->
+    <div id="view-btns">
+        <button onclick="setView('xy')">XY</button>
+        <button onclick="setView('xz')">XZ</button>
+        <button onclick="setView('yz')">YZ</button>
+    </div>
+
+    <!-- Popup -->
+    <div id="popup">
+        <div id="popup-header">
+            <span id="popup-title">EVENT</span>
+            <span id="popup-close" onclick="closePopup()">×</span>
+        </div>
+        <div id="popup-body">
+            <div>Date: <strong id="popup-date">—</strong></div>
+            <div>Position: <strong id="popup-pos">—</strong></div>
+            <div style="margin-top:8px; padding-top:8px; border-top:1px dashed #333;">
+                <a id="popup-link" href="#" target="_blank" style="color:#00ddff;">View Data →</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+
+// ============ SETUP ============
+const viewport = document.getElementById('viewport');
+const width = viewport.clientWidth;
+const height = viewport.clientHeight;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x010103);
+
+const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 500);
+camera.position.set(25, 20, 35);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(width, height);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+viewport.insertBefore(renderer.domElement, viewport.firstChild);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+
+// ============ SCENE OBJECTS ============
+
+// Axes
+scene.add(new THREE.AxesHelper(8));
+
+// Earth
+const earthGeo = new THREE.SphereGeometry(1, 32, 32);
+const earthMat = new THREE.MeshBasicMaterial({ color: 0x1133aa, wireframe: true });
+const earth = new THREE.Mesh(earthGeo, earthMat);
+scene.add(earth);
+
+// ============ BOUNDARIES ============
+const boundaryGroup = new THREE.Group();
+scene.add(boundaryGroup);
+
+let currentR0 = 10.5;
+const alpha = 0.6;
+
+function createSurface(r0, isBowShock, color, opacity) {
+    const segments = 50;
+    const geometry = new THREE.BufferGeometry();
+    const vertices = [];
+    const indices = [];
+
+    const thetaMax = isBowShock ? Math.PI * 0.7 : Math.PI * 0.85;
+    const scale = isBowShock ? 1.3 : 1.0;
+
+    for (let i = 0; i <= segments; i++) {
+        const theta = (i / segments) * thetaMax;
+        const cosTheta = Math.cos(theta);
+        const r = r0 * scale * Math.pow(2 / (1 + cosTheta), alpha);
+
+        for (let j = 0; j <= segments; j++) {
+            const phi = (j / segments) * Math.PI * 2;
+            const x = r * Math.cos(theta);
+            const y = r * Math.sin(theta) * Math.cos(phi);
+            const z = r * Math.sin(theta) * Math.sin(phi);
+            vertices.push(x, y, z);
+        }
+    }
+
+    for (let i = 0; i < segments; i++) {
+        for (let j = 0; j < segments; j++) {
+            const a = i * (segments + 1) + j;
+            const b = a + segments + 1;
+            indices.push(a, b, a + 1);
+            indices.push(b, b + 1, a + 1);
+        }
+    }
+
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+
+    const material = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: opacity,
+        side: THREE.DoubleSide,
+        wireframe: false,
+        depthWrite: false
+    });
+
+    return new THREE.Mesh(geometry, material);
+}
+
+function createWireframe(r0, isBowShock, color) {
+    const segments = 30;
+    const points = [];
+    const thetaMax = isBowShock ? Math.PI * 0.7 : Math.PI * 0.85;
+    const scale = isBowShock ? 1.3 : 1.0;
+
+    // Meridian lines
+    for (let p = 0; p < 8; p++) {
+        const phi = (p / 8) * Math.PI * 2;
+        const line = [];
+        for (let i = 0; i <= 40; i++) {
+            const theta = (i / 40) * thetaMax;
+            const cosTheta = Math.cos(theta);
+            const r = r0 * scale * Math.pow(2 / (1 + cosTheta), alpha);
+            const x = r * Math.cos(theta);
+            const y = r * Math.sin(theta) * Math.cos(phi);
+            const z = r * Math.sin(theta) * Math.sin(phi);
+            line.push(new THREE.Vector3(x, y, z));
+        }
+        const geo = new THREE.BufferGeometry().setFromPoints(line);
+        const mat = new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.4 });
+        points.push(new THREE.Line(geo, mat));
+    }
+
+    // Latitude circles
+    for (let i = 1; i < 6; i++) {
+        const theta = (i / 6) * thetaMax;
+        const cosTheta = Math.cos(theta);
+        const r = r0 * scale * Math.pow(2 / (1 + cosTheta), alpha);
+        const circle = [];
+        for (let j = 0; j <= 60; j++) {
+            const phi = (j / 60) * Math.PI * 2;
+            const x = r * Math.cos(theta);
+            const y = r * Math.sin(theta) * Math.cos(phi);
+            const z = r * Math.sin(theta) * Math.sin(phi);
+            circle.push(new THREE.Vector3(x, y, z));
+        }
+        const geo = new THREE.BufferGeometry().setFromPoints(circle);
+        const mat = new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.3 });
+        points.push(new THREE.Line(geo, mat));
+    }
+
+    const group = new THREE.Group();
+    points.forEach(l => group.add(l));
+    return group;
+}
+
+function buildBoundaries() {
+    boundaryGroup.clear();
+
+    // Magnetopause
+    const mpSurface = createSurface(currentR0, false, 0x00aaff, 0.08);
+    const mpWire = createWireframe(currentR0, false, 0x00ddff);
+    boundaryGroup.add(mpSurface);
+    boundaryGroup.add(mpWire);
+
+    // Bow Shock
+    const bsSurface = createSurface(currentR0, true, 0xffaa00, 0.05);
+    const bsWire = createWireframe(currentR0, true, 0xffaa00);
+    boundaryGroup.add(bsSurface);
+    boundaryGroup.add(bsWire);
+}
+
+buildBoundaries();
+
+// R0 slider
+document.getElementById('r0-slider').addEventListener('input', (e) => {
+    currentR0 = parseFloat(e.target.value);
+    document.getElementById('r0-value').textContent = currentR0.toFixed(1) + ' Re';
+    buildBoundaries();
+});
+
+// Toggle boundaries
+document.getElementById('chk-boundaries').addEventListener('change', (e) => {
+    boundaryGroup.visible = e.target.checked;
+});
+
+// ============ CATALOGS ============
+const catalogs = {};
+const catalogPoints = {};
+
+function generateCatalog(name, color, count) {
+    const positions = [];
+    const data = [];
+
+    for (let i = 0; i < count; i++) {
+        const r = 7 + Math.random() * 10;
+        const theta = Math.random() * Math.PI;
+        const phi = Math.random() * Math.PI * 2;
+
+        const x = r * Math.sin(theta) * Math.cos(phi);
+        const y = r * Math.sin(theta) * Math.sin(phi);
+        const z = r * Math.cos(theta);
+
+        positions.push(x, y, z);
+        data.push({
+            id: `${name.toUpperCase()}-${String(i).padStart(3, '0')}`,
+            date: `2023-${String(1 + Math.floor(Math.random() * 12)).padStart(2, '0')}-${String(1 + Math.floor(Math.random() * 28)).padStart(2, '0')}`,
+            pos: [x.toFixed(2), y.toFixed(2), z.toFixed(2)]
+        });
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+
+    const material = new THREE.PointsMaterial({
+        color: color,
+        size: 0.6,
+        sizeAttenuation: true
+    });
+
+    const points = new THREE.Points(geometry, material);
+    points.userData.catalogName = name;
+
+    return { mesh: points, data: data };
+}
+
+function toggleCatalog(name, color, count, enabled) {
+    if (enabled) {
+        if (!catalogs[name]) {
+            const cat = generateCatalog(name, color, count);
+            catalogs[name] = cat;
+            catalogPoints[name] = cat.mesh;
+            scene.add(cat.mesh);
+        }
+    } else {
+        if (catalogs[name]) {
+            scene.remove(catalogs[name].mesh);
+            delete catalogs[name];
+            delete catalogPoints[name];
+        }
+        closePopup();
+    }
+}
+
+document.getElementById('chk-mms').addEventListener('change', (e) => {
+    toggleCatalog('mms', 0xff00ff, 80, e.target.checked);
+});
+document.getElementById('chk-themis').addEventListener('change', (e) => {
+    toggleCatalog('themis', 0x00ff88, 60, e.target.checked);
+});
+document.getElementById('chk-cluster').addEventListener('change', (e) => {
+    toggleCatalog('cluster', 0xffff00, 50, e.target.checked);
+});
+
+// ============ RAYCASTING & POPUP ============
+const raycaster = new THREE.Raycaster();
+raycaster.params.Points.threshold = 0.5;
+const mouse = new THREE.Vector2();
+
+let selectedPoint3D = null;
+let popupVisible = false;
+
+renderer.domElement.addEventListener('click', (event) => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+
+    const meshes = Object.values(catalogPoints);
+    if (meshes.length === 0) return;
+
+    const intersects = raycaster.intersectObjects(meshes);
+
+    if (intersects.length > 0) {
+        const hit = intersects[0];
+        const catalogName = hit.object.userData.catalogName;
+        const index = hit.index;
+        const eventData = catalogs[catalogName].data[index];
+
+        selectedPoint3D = hit.point.clone();
+        showPopup(eventData, event.clientX, event.clientY);
+    } else {
+        closePopup();
+    }
+});
+
+function showPopup(data, mx, my) {
+    const popup = document.getElementById('popup');
+    document.getElementById('popup-title').textContent = data.id;
+    document.getElementById('popup-date').textContent = data.date;
+    document.getElementById('popup-pos').textContent = `[${data.pos.join(', ')}] Re`;
+
+    // Position popup
+    let left = mx + 25;
+    let top = my - 20;
+
+    // Keep on screen
+    const popupWidth = 240;
+    const sidebarWidth = 260;
+    if (left + popupWidth > window.innerWidth) {
+        left = mx - popupWidth - 25;
+    }
+    if (top < 10) top = 10;
+    if (top + 150 > window.innerHeight) top = window.innerHeight - 160;
+
+    // Convert to viewport-relative coordinates
+    popup.style.left = (left - sidebarWidth) + 'px';
+    popup.style.top = top + 'px';
+    popup.style.display = 'block';
+
+    popupVisible = true;
+}
+
+window.closePopup = function() {
+    document.getElementById('popup').style.display = 'none';
+    document.getElementById('connector-line').style.display = 'none';
+    document.getElementById('connector-dot').style.display = 'none';
+    popupVisible = false;
+    selectedPoint3D = null;
+};
+
+// ============ UPDATE CONNECTOR LINE ============
+function updateConnector() {
+    if (!popupVisible || !selectedPoint3D) return;
+
+    const line = document.getElementById('connector-line');
+    const dot = document.getElementById('connector-dot');
+
+    // Project 3D point to 2D
+    const projected = selectedPoint3D.clone().project(camera);
+
+    // Check if behind camera
+    if (projected.z > 1) {
+        line.style.display = 'none';
+        dot.style.display = 'none';
+        return;
+    }
+
+    // Convert to pixel coordinates (relative to viewport)
+    const vw = viewport.clientWidth;
+    const vh = viewport.clientHeight;
+
+    const x3d = (projected.x * 0.5 + 0.5) * vw;
+    const y3d = (-projected.y * 0.5 + 0.5) * vh;
+
+    // Get popup position
+    const popup = document.getElementById('popup');
+    const popupRect = popup.getBoundingClientRect();
+    const viewportRect = viewport.getBoundingClientRect();
+
+    const xPopup = popupRect.left - viewportRect.left;
+    const yPopup = popupRect.top - viewportRect.top + 20;
+
+    // Update SVG elements
+    line.setAttribute('x1', x3d);
+    line.setAttribute('y1', y3d);
+    line.setAttribute('x2', xPopup);
+    line.setAttribute('y2', yPopup);
+    line.style.display = 'block';
+
+    dot.setAttribute('cx', x3d);
+    dot.setAttribute('cy', y3d);
+    dot.style.display = 'block';
+}
+
+// ============ VIEW CONTROLS ============
+window.setView = function(axis) {
+    const dist = 50;
+    if (axis === 'xy') {
+        camera.position.set(0, 0, dist);
+        camera.up.set(0, 1, 0);
+    } else if (axis === 'xz') {
+        camera.position.set(0, -dist, 0);
+        camera.up.set(0, 0, 1);
+    } else if (axis === 'yz') {
+        camera.position.set(dist, 0, 0);
+        camera.up.set(0, 0, 1);
+    }
+    controls.target.set(0, 0, 0);
+    controls.update();
+};
+
+// ============ RESIZE ============
+window.addEventListener('resize', () => {
+    const w = viewport.clientWidth;
+    const h = viewport.clientHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+});
+
+// ============ ANIMATION LOOP ============
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+    updateConnector();
+}
+
+animate();
+
+</script>
+</body>
+</html>
+
