@@ -13,3 +13,17 @@ def shue_mp(theta, r0: float, alpha: float):
     """
     theta = np.asarray(theta, dtype=float)
     return r0 * (2.0 / (1.0 + np.cos(theta))) ** alpha
+
+
+def shue_r0(bz: float, pd: float) -> float:
+    """Shue+1998 subsolar standoff distance (RE).
+
+    bz : IMF Bz (nT), GSM.
+    pd : solar wind dynamic pressure (nPa).
+    """
+    return (10.22 + 1.29 * np.tanh(0.184 * (bz + 8.14))) * pd ** (-1.0 / 6.6)
+
+
+def shue_alpha(bz: float, pd: float) -> float:
+    """Shue+1998 flaring exponent."""
+    return (0.58 - 0.007 * bz) * (1.0 + 0.024 * np.log(pd))

@@ -22,3 +22,21 @@ def test_shue_mp_vectorized():
     assert r.shape == theta.shape
     # Monotone increasing with theta in [0, pi*0.85]
     assert np.all(np.diff(r) >= -1e-9)
+
+
+from mango_explorer.boundaries import shue_r0, shue_alpha
+
+
+def test_shue_r0_nominal_solar_wind():
+    # Bz=0 nT, Pd=2 nPa: r0 ~ 10.22 * (1 + tanh-term) * 2^(-1/6.6)
+    r0 = shue_r0(bz=0.0, pd=2.0)
+    assert 9.5 < r0 < 11.5
+
+
+def test_shue_alpha_negative_bz_decreases_r0_increases_alpha():
+    r0_pos = shue_r0(bz=5.0, pd=2.0)
+    r0_neg = shue_r0(bz=-5.0, pd=2.0)
+    assert r0_neg < r0_pos  # southward IMF → MP closer
+    a_pos = shue_alpha(bz=5.0, pd=2.0)
+    a_neg = shue_alpha(bz=-5.0, pd=2.0)
+    assert a_neg > a_pos  # more flared under southward IMF
