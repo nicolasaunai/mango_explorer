@@ -45,11 +45,11 @@ def _orient_texture(rgba: np.ndarray, plane: str) -> np.ndarray:
 
 
 def build_slice(plane: str, position: float, variable: str = "Np",
-                extent: float = 25.0, n: int = 256,
+                extent: float = 25.0, n: int = 128, slab: float = 2.0,
                 filters: dict | None = None) -> dict:
     df = data.get_data("magnetosheath", **(filters or {}))
     grid, mask = bin_scattered_2d(df, plane=plane, position=position,
-                                  variable=variable, extent=extent, n=n)
+                                  variable=variable, extent=extent, n=n, slab=slab)
     if mask.any():
         vmin = float(np.nanpercentile(grid[mask], 2))
         vmax = float(np.nanpercentile(grid[mask], 98))

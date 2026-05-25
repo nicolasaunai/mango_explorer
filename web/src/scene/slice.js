@@ -8,6 +8,8 @@ export class SliceLayer {
     this.texture = new THREE.DataTexture(
       new Uint8Array(n * n * 4), n, n, THREE.RGBAFormat
     );
+    this.texture.magFilter = THREE.LinearFilter;
+    this.texture.minFilter = THREE.LinearFilter;
     this.texture.needsUpdate = true;
     const geo = new THREE.PlaneGeometry(extent * 2, extent * 2);
     const mat = new THREE.MeshBasicMaterial({
