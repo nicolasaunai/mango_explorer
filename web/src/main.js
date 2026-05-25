@@ -44,11 +44,11 @@ async function rebuildEvents(missions) {
   eventMeshes.forEach(m => scene.add(m));
 }
 
-const slice = new SliceLayer(scene, 25, 128);
+const slice = new SliceLayer(scene, 25, 256);
 async function refreshSlice() {
   const out = await bridge.buildSlice({
     plane: state.plane, position: state.position, variable: 'Np',
-    extent: 25, n: 128, slab: 2.0,
+    extent: 25, n: 256, slab: 2.0,
     filters: { ma_sw_min: state.machMin, ma_sw_max: state.machMax },
   });
   slice.setPlane(state.plane, state.position);

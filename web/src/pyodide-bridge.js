@@ -17,7 +17,7 @@ export async function init(onStatus = () => {}) {
   await py.runPythonAsync(`
 import mango_explorer
 from mango_explorer import config, explorer
-config.use_source('fake', seed=42, n_points=50000)
+config.use_source('fake', seed=42, n_points=500000)
 `);
 }
 
