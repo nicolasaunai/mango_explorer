@@ -12,7 +12,7 @@ def test_build_boundary_mp():
     out = explorer.build_boundary("mp", r0=10.5, alpha=0.6)
     assert out["positions"].dtype == np.float32
     assert out["indices"].dtype == np.uint32
-    assert out["positions"].ndim == 2 and out["positions"].shape[1] == 3
+    assert out["positions"].ndim == 1 and out["positions"].size % 3 == 0
 
 
 def test_build_boundary_bs():
@@ -32,7 +32,7 @@ def test_build_slice_returns_rgba_and_meta():
 def test_build_events_returns_positions_and_metadata():
     out = explorer.build_events(missions=["MMS", "THEMIS"])
     assert out["positions"].dtype == np.float32
-    assert out["positions"].shape[1] == 3
-    assert len(out["meta"]) == out["positions"].shape[0]
+    assert out["positions"].ndim == 1 and out["positions"].size % 3 == 0
+    assert len(out["meta"]) == out["positions"].size // 3
     # Each metadata row has id/mission/date/type/doi
     assert {"id", "mission", "date", "type", "doi"} <= set(out["meta"][0].keys())

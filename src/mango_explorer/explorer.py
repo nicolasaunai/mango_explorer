@@ -25,7 +25,7 @@ def build_boundary(name: str, r0: float | None = None, alpha: float = 0.6,
 
     pos, idx = tessellate_surface(r_of_theta, n_theta=n_theta, n_phi=n_phi,
                                   theta_max=theta_max)
-    return {"positions": pos, "indices": idx}
+    return {"positions": pos.ravel(), "indices": idx.ravel()}
 
 
 def build_slice(plane: str, position: float, variable: str = "Np",
@@ -47,7 +47,7 @@ def build_slice(plane: str, position: float, variable: str = "Np",
 def build_events(missions: list[str] | None = None) -> dict:
     kwargs = {"mission": missions} if missions else {}
     df = data.get_data("events", **kwargs)
-    pos = np.stack([df["X_gsm"], df["Y_gsm"], df["Z_gsm"]], axis=-1).astype(np.float32)
+    pos = np.stack([df["X_gsm"], df["Y_gsm"], df["Z_gsm"]], axis=-1).astype(np.float32).ravel()
     keys = ["id", "mission", "date", "type", "doi", "title", "authors", "year", "journal"]
     n = len(df["id"])
     meta = [
