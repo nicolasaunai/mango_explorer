@@ -169,20 +169,51 @@ class FakeSource(Source):
             return self._cache["events"]
         rng = np.random.default_rng(self.seed + 1)
 
+        # Physical placement rules per event type:
+        #   theta_range: (min, max) radians — controls which part of boundary
+        #   d_range: fractional depth in magnetosheath (0=BS, 1=MP); None = on MP
+        _PLACEMENT = {
+            "FTE":           {"theta": (0.0, np.pi * 0.55), "d": (0.85, 1.05)},  # near MP, subsolar
+            "EDR":           {"theta": (0.0, np.pi * 0.40), "d": (0.90, 1.05)},  # on MP, strongly subsolar
+            "Jet":           {"theta": (0.0, np.pi * 0.50), "d": (0.55, 0.85)},  # magnetosheath near MP
+            "Current Sheet": {"theta": (0.0, np.pi * 0.65), "d": (0.80, 1.05)},  # on/just inside MP
+            "KH Wave":       {"theta": (np.pi * 0.50, np.pi * 0.80), "d": (0.88, 1.05)},  # flanks of MP
+            "Mirror Mode":   {"theta": (0.0, np.pi * 0.70), "d": (0.20, 0.75)},  # deep magnetosheath
+        }
+
+        # Mission orbital/science biases: (preferred event types, theta_max, year range)
+        _MISSIONS = {
+            "MMS":    {"types": ["FTE", "EDR", "Current Sheet", "Jet"],
+                       "theta_max": np.pi * 0.55, "years": (2015, 2024), "count": 25},
+            "THEMIS": {"types": ["FTE", "Jet", "Mirror Mode", "KH Wave"],
+                       "theta_max": np.pi * 0.75, "years": (2007, 2024), "count": 20},
+            "Cluster":{"types": ["FTE", "KH Wave", "Mirror Mode", "Current Sheet"],
+                       "theta_max": np.pi * 0.75, "years": (2001, 2020), "count": 15},
+        }
+
         rows: list[dict] = []
-        mission_specs = [("MMS", 25, (2015, 2024)),
-                         ("THEMIS", 20, (2007, 2024)),
-                         ("Cluster", 15, (2001, 2024))]
         eid = 0
-        for mission, count, (yr0, yr1) in mission_specs:
-            for _ in range(count):
-                theta = rng.uniform(0.0, np.pi * 0.7)
+        for mission, cfg in _MISSIONS.items():
+            yr0, yr1 = cfg["years"]
+            for _ in range(cfg["count"]):
+                etype = cfg["types"][int(rng.integers(0, len(cfg["types"])))]
+                pl = _PLACEMENT[etype]
+
+                theta_lo = pl["theta"][0]
+                theta_hi = min(pl["theta"][1], cfg["theta_max"])
+                theta = rng.uniform(theta_lo, theta_hi)
                 phi = rng.uniform(0.0, 2.0 * np.pi)
-                r = rng.uniform(8.0, 14.0)
+
+                # d=1 → on MP, d=0 → on BS; allow slight overshoot (d>1) for MP-grazing
+                d = np.clip(rng.uniform(pl["d"][0], pl["d"][1]), 0.0, 1.1)
+                r_mp = float(shue_mp(theta, r0=10.5, alpha=0.6))
+                r_bs = float(jelinek_bs(theta, pd=2.0))
+                r = r_bs + d * (r_mp - r_bs)  # d=0→BS, d=1→MP
+                r = float(np.clip(r, r_mp - 0.5, r_bs + 0.5))
+
                 year = int(rng.integers(yr0, yr1 + 1))
                 month = int(rng.integers(1, 13))
                 day = int(rng.integers(1, 29))
-                etype = EVENT_TYPES[int(rng.integers(0, len(EVENT_TYPES)))]
                 paper = rng.choice(PAPERS[etype])
                 eid += 1
                 rows.append({
