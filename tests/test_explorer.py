@@ -24,7 +24,7 @@ def test_build_slice_returns_rgba_and_meta():
     out = explorer.build_slice(plane="xy", position=0.0, variable="Np",
                                extent=25.0, n=64,
                                filters={"ma_sw_min": 3.0, "ma_sw_max": 6.0})
-    assert out["rgba"].shape == (64, 64, 4)
+    assert out["rgba"].ndim == 1 and out["rgba"].size == 64 * 64 * 4
     assert out["rgba"].dtype == np.float32
     assert "vmin" in out and "vmax" in out and "ticks" in out
 

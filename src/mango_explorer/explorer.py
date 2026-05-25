@@ -41,7 +41,7 @@ def build_slice(plane: str, position: float, variable: str = "Np",
         vmin, vmax = 0.0, 1.0
     rgba = to_rgba(grid, vmin=vmin, vmax=vmax, mask=mask)
     cb = colorbar_info(vmin, vmax)
-    return {"rgba": rgba, "vmin": cb["vmin"], "vmax": cb["vmax"], "ticks": cb["ticks"]}
+    return {"rgba": rgba.ravel(), "vmin": cb["vmin"], "vmax": cb["vmax"], "ticks": cb["ticks"]}
 
 
 def build_events(missions: list[str] | None = None) -> dict:
