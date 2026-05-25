@@ -28,6 +28,22 @@ def build_boundary(name: str, r0: float | None = None, alpha: float = 0.6,
     return {"positions": pos.ravel(), "indices": idx.ravel()}
 
 
+def _orient_texture(rgba: np.ndarray, plane: str) -> np.ndarray:
+    # Three.js DataTexture (flipY=false): row 0 = bottom, col 0 = left.
+    # PlaneGeometry UV: col -> plane-X axis, row -> plane-Y axis.
+    # After each rotation the plane axes map to world axes differently:
+    #   xy (no rotation): plane-X=worldX, plane-Y=worldY  -> swap u/v axes
+    #   xz (rot.x=-90°):  plane-X=worldX, plane-Y=world-Z -> swap + flip rows
+    #   yz (rot.y=+90°):  plane-X=world-Z, plane-Y=worldY -> flip v cols
+    if plane == "xy":
+        return rgba.transpose(1, 0, 2)
+    if plane == "xz":
+        return rgba.transpose(1, 0, 2)[::-1, :, :]
+    if plane == "yz":
+        return rgba[:, ::-1, :]
+    return rgba
+
+
 def build_slice(plane: str, position: float, variable: str = "Np",
                 extent: float = 25.0, n: int = 256,
                 filters: dict | None = None) -> dict:
@@ -39,7 +55,7 @@ def build_slice(plane: str, position: float, variable: str = "Np",
         vmax = float(np.nanpercentile(grid[mask], 98))
     else:
         vmin, vmax = 0.0, 1.0
-    rgba = to_rgba(grid, vmin=vmin, vmax=vmax, mask=mask)
+    rgba = _orient_texture(to_rgba(grid, vmin=vmin, vmax=vmax, mask=mask), plane)
     cb = colorbar_info(vmin, vmax)
     return {"rgba": rgba.ravel(), "vmin": cb["vmin"], "vmax": cb["vmax"], "ticks": cb["ticks"]}
 
