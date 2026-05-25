@@ -34,6 +34,12 @@ export async function buildSlice(params) {
   const proxy = await py.runPythonAsync(`explorer.build_slice(**_params)`);
   const out = proxy.toJs({ dict_converter: Object.fromEntries });
   proxy.destroy();
+  const rgba = out.rgba instanceof Float32Array ? out.rgba : new Float32Array(out.rgba);
+  const nPx = rgba.length / 4;
+  let nonZero = 0;
+  for (let i = 0; i < nPx; i++) if (rgba[i * 4 + 3] > 0) nonZero++;
+  console.log(`buildSlice(${params.plane}): ${nonZero}/${nPx} visible pixels`);
+  out.rgba = rgba;
   return out;
 }
 

@@ -36,11 +36,11 @@ def _orient_texture(rgba: np.ndarray, plane: str) -> np.ndarray:
     #   xz (rot.x=-90°):  plane-X=worldX, plane-Y=world-Z -> swap + flip rows
     #   yz (rot.y=+90°):  plane-X=world-Z, plane-Y=worldY -> flip v cols
     if plane == "xy":
-        return rgba.transpose(1, 0, 2)
+        return np.ascontiguousarray(rgba.transpose(1, 0, 2))
     if plane == "xz":
-        return rgba.transpose(1, 0, 2)[::-1, :, :]
+        return np.ascontiguousarray(rgba.transpose(1, 0, 2)[::-1, :, :])
     if plane == "yz":
-        return rgba[:, ::-1, :]
+        return np.ascontiguousarray(rgba[:, ::-1, :])
     return rgba
 
 
