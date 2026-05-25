@@ -4,6 +4,7 @@ import { createScene } from './scene/scene.js';
 import { makeBoundaryMesh } from './scene/boundaries.js';
 import { makeEventMeshes } from './scene/events.js';
 import { showPopup, hidePopup } from './ui/popup.js';
+import { SliceLayer } from './scene/slice.js';
 
 function asFloat32(a) { return a instanceof Float32Array ? a : new Float32Array(a.flat ? a.flat(Infinity) : a); }
 function asUint32(a)  { return a instanceof Uint32Array  ? a : new Uint32Array(a.flat  ? a.flat(Infinity)  : a); }
@@ -35,3 +36,15 @@ document.querySelector('#viewport canvas').addEventListener('click', (e) => {
   if (hits.length) showPopup(hits[0].object.userData);
   else hidePopup();
 });
+
+const slice = new SliceLayer(scene, 25, 256);
+async function refreshSlice(plane, position, machMin, machMax) {
+  const out = await bridge.buildSlice({
+    plane, position, variable: 'Np', extent: 25, n: 256,
+    filters: { ma_sw_min: machMin, ma_sw_max: machMax },
+  });
+  slice.setPlane(plane, position);
+  slice.updateData(out.rgba);
+}
+slice.show();
+await refreshSlice('xy', 0, 1, 10);
