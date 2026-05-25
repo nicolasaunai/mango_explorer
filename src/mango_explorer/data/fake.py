@@ -9,6 +9,7 @@ import polars as pl
 
 from .base import Source
 from ..boundaries import shue_mp, jelinek_bs
+from ..papers import EVENT_TYPES, PAPERS
 
 _SPACECRAFT: Final = ["MMS1", "THA", "C1"]
 
@@ -37,25 +38,32 @@ class FakeSource(Source):
         self._cache: dict[str, pl.DataFrame] = {}
 
     def regions(self) -> list[str]:
-        return ["magnetosheath"]
+        return ["magnetosheath", "events"]
 
     def filters(self, region: str) -> list[dict]:
-        if region != "magnetosheath":
-            raise ValueError(f"Unknown region: {region}")
-        return [
-            {"name": n, "column": c, "unit": u, "description": d,
-             "params": f"{n}_min=..&{n}_max=.."}
-            for (n, c, u, d) in _FILTER_CATALOG
-        ]
+        if region == "magnetosheath":
+            return [
+                {"name": n, "column": c, "unit": u, "description": d,
+                 "params": f"{n}_min=..&{n}_max=.."}
+                for (n, c, u, d) in _FILTER_CATALOG
+            ]
+        if region == "events":
+            return []
+        raise ValueError(f"Unknown region: {region}")
 
     def columns(self, region: str) -> list[str]:
-        return self._magnetosheath().columns
+        if region == "magnetosheath":
+            return self._magnetosheath().columns
+        if region == "events":
+            return self._events().columns
+        raise ValueError(f"Unknown region: {region}")
 
     def get_data(self, region: str, **kwargs) -> pl.DataFrame:
-        if region != "magnetosheath":
-            raise ValueError(f"Unknown region: {region}")
-        df = self._magnetosheath()
-        return self._apply_filters(df, kwargs)
+        if region == "magnetosheath":
+            return self._apply_filters(self._magnetosheath(), kwargs)
+        if region == "events":
+            return self._apply_event_filters(self._events(), kwargs)
+        raise ValueError(f"Unknown region: {region}")
 
     def _magnetosheath(self) -> pl.DataFrame:
         if "magnetosheath" in self._cache:
@@ -143,4 +151,51 @@ class FakeSource(Source):
                 df = df.filter(pl.col(name_to_col[name]) <= val)
             else:
                 raise ValueError(f"Filter kwargs must end with _min or _max; got {key}")
+        return df
+
+    def _events(self) -> pl.DataFrame:
+        if "events" in self._cache:
+            return self._cache["events"]
+        rng = np.random.default_rng(self.seed + 1)
+
+        rows = []
+        mission_specs = [("MMS", 25, (2015, 2024)),
+                         ("THEMIS", 20, (2007, 2024)),
+                         ("Cluster", 15, (2001, 2024))]
+        eid = 0
+        for mission, count, (yr0, yr1) in mission_specs:
+            for _ in range(count):
+                theta = rng.uniform(0.0, np.pi * 0.7)
+                phi = rng.uniform(0.0, 2.0 * np.pi)
+                r = rng.uniform(8.0, 14.0)
+                year = int(rng.integers(yr0, yr1 + 1))
+                month = int(rng.integers(1, 13))
+                day = int(rng.integers(1, 29))
+                etype = EVENT_TYPES[int(rng.integers(0, len(EVENT_TYPES)))]
+                paper = rng.choice(PAPERS[etype])
+                eid += 1
+                rows.append({
+                    "id": f"{mission}-{year:04d}{month:02d}{day:02d}-{eid:03d}",
+                    "mission": mission,
+                    "date": f"{year:04d}-{month:02d}-{day:02d}",
+                    "type": etype,
+                    "X_gsm": float(r * np.cos(theta)),
+                    "Y_gsm": float(r * np.sin(theta) * np.cos(phi)),
+                    "Z_gsm": float(r * np.sin(theta) * np.sin(phi)),
+                    "doi": paper["doi"],
+                    "title": paper["title"],
+                    "authors": paper["authors"],
+                    "year": int(paper["year"]),
+                    "journal": paper["journal"],
+                })
+        df = pl.DataFrame(rows)
+        self._cache["events"] = df
+        return df
+
+    def _apply_event_filters(self, df: pl.DataFrame, kwargs: dict) -> pl.DataFrame:
+        for k, v in kwargs.items():
+            if k == "mission":
+                df = df.filter(pl.col("mission").is_in(list(v)))
+            else:
+                raise ValueError(f"Unknown events filter: {k}")
         return df

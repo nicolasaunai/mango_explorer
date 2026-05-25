@@ -62,3 +62,24 @@ def test_points_lie_between_mp_and_bs(src):
 def test_invalid_filter_raises(src):
     with pytest.raises(ValueError):
         src.get_data("magnetosheath", bogus_min=1)
+
+
+def test_events_region_present(src):
+    assert "events" in src.regions()
+
+
+def test_events_have_expected_columns(src):
+    cols = set(src.columns("events"))
+    must_have = {"id", "mission", "date", "type", "X_gsm", "Y_gsm", "Z_gsm",
+                 "doi", "title", "authors", "year", "journal"}
+    assert must_have <= cols
+
+
+def test_events_mission_filter(src):
+    df = src.get_data("events", mission=["MMS"])
+    assert set(df["mission"].unique().to_list()) <= {"MMS"}
+
+
+def test_events_count_is_about_sixty(src):
+    df = src.get_data("events")
+    assert 40 <= len(df) <= 100
