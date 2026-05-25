@@ -6,10 +6,11 @@ export async function init() {
   py = await loadPyodide({
     indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/',
   });
-  await py.loadPackage(['numpy', 'polars', 'micropip']);
+  await py.loadPackage(['numpy', 'micropip']);
   const wheels = await fetch('./wheels/index.json').then(r => r.json());
   await py.runPythonAsync(`
 import micropip
+await micropip.install('polars')
 await micropip.install('${wheels.url}')
 import mango_explorer
 from mango_explorer import config, explorer
