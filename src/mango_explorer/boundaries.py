@@ -27,3 +27,20 @@ def shue_r0(bz: float, pd: float) -> float:
 def shue_alpha(bz: float, pd: float) -> float:
     """Shue+1998 flaring exponent."""
     return (0.58 - 0.007 * bz) * (1.0 + 0.024 * np.log(pd))
+
+
+_JEL_LAMBDA = 15.02   # RE at 1 nPa, per Jelínek+2012 fit
+_JEL_EPS = 6.55       # pressure exponent
+_JEL_ALPHA = 0.78     # flaring exponent (verify against paper)
+
+
+def jelinek_r0(pd: float) -> float:
+    """Jelínek+2012 bow-shock subsolar standoff (RE) as a function of Pd_sw."""
+    return _JEL_LAMBDA * pd ** (-1.0 / _JEL_EPS)
+
+
+def jelinek_bs(theta, pd: float, alpha: float = _JEL_ALPHA):
+    """Jelínek+2012 bow shock surface: r(theta)."""
+    theta = np.asarray(theta, dtype=float)
+    r0 = jelinek_r0(pd)
+    return r0 * (2.0 / (1.0 + np.cos(theta))) ** alpha

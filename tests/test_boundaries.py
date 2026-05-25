@@ -40,3 +40,23 @@ def test_shue_alpha_negative_bz_decreases_r0_increases_alpha():
     a_pos = shue_alpha(bz=5.0, pd=2.0)
     a_neg = shue_alpha(bz=-5.0, pd=2.0)
     assert a_neg > a_pos  # more flared under southward IMF
+
+
+from mango_explorer.boundaries import jelinek_bs, jelinek_r0
+
+
+def test_jelinek_bs_is_outside_shue_mp_at_subsolar():
+    r_mp = shue_mp(theta=0.0, r0=10.5, alpha=0.6)
+    r_bs = jelinek_bs(theta=0.0, pd=2.0)
+    assert r_bs > r_mp
+
+
+def test_jelinek_r0_decreases_with_pd():
+    assert jelinek_r0(pd=1.0) > jelinek_r0(pd=4.0)
+
+
+def test_jelinek_bs_vectorized_and_monotone():
+    theta = np.linspace(0, math.pi * 0.7, 40)
+    r = jelinek_bs(theta=theta, pd=2.0)
+    assert r.shape == theta.shape
+    assert np.all(np.diff(r) >= -1e-9)
