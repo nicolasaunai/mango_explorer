@@ -2,10 +2,9 @@
 from __future__ import annotations
 
 import datetime as _dt
-from typing import Final
+from typing import Any, Final
 
 import numpy as np
-import polars as pl
 
 from .base import Source
 from ..boundaries import shue_mp, jelinek_bs
@@ -29,13 +28,23 @@ def _compression_ratio(mach: np.ndarray, gamma: float = 5.0 / 3.0) -> np.ndarray
     return ((gamma + 1.0) * m2) / ((gamma - 1.0) * m2 + 2.0)
 
 
+def _mask_dict(data: dict[str, Any], mask: np.ndarray) -> dict[str, Any]:
+    result = {}
+    for k, v in data.items():
+        if isinstance(v, np.ndarray):
+            result[k] = v[mask]
+        else:
+            result[k] = [item for item, m in zip(v, mask) if m]
+    return result
+
+
 class FakeSource(Source):
     """Deterministic fake MANGO data source."""
 
     def __init__(self, seed: int = 42, n_points: int = 50_000):
         self.seed = seed
         self.n_points = n_points
-        self._cache: dict[str, pl.DataFrame] = {}
+        self._cache: dict[str, dict[str, Any]] = {}
 
     def regions(self) -> list[str]:
         return ["magnetosheath", "events"]
@@ -53,28 +62,28 @@ class FakeSource(Source):
 
     def columns(self, region: str) -> list[str]:
         if region == "magnetosheath":
-            return self._magnetosheath().columns
+            return list(self._magnetosheath().keys())
         if region == "events":
-            return self._events().columns
+            return list(self._events().keys())
         raise ValueError(f"Unknown region: {region}")
 
-    def get_data(self, region: str, **kwargs) -> pl.DataFrame:
+    def get_data(self, region: str, **kwargs) -> dict[str, Any]:
         if region == "magnetosheath":
             return self._apply_filters(self._magnetosheath(), kwargs)
         if region == "events":
             return self._apply_event_filters(self._events(), kwargs)
         raise ValueError(f"Unknown region: {region}")
 
-    def _magnetosheath(self) -> pl.DataFrame:
+    def _magnetosheath(self) -> dict[str, Any]:
         if "magnetosheath" in self._cache:
             return self._cache["magnetosheath"]
 
         rng = np.random.default_rng(self.seed)
         n = self.n_points
 
-        theta = np.arccos(1.0 - 0.85 * rng.random(n))  # bias toward subsolar
+        theta = np.arccos(1.0 - 0.85 * rng.random(n))
         phi = rng.uniform(0.0, 2.0 * np.pi, n)
-        d = rng.uniform(0.0, 1.0, n)  # 0 = at BS, 1 = at MP
+        d = rng.uniform(0.0, 1.0, n)
 
         ma_sw = np.clip(rng.lognormal(mean=np.log(6.0), sigma=0.3, size=n), 1.0, 12.0)
         pd_sw = np.clip(0.5 + 0.4 * (ma_sw - 6.0) + rng.normal(0.0, 0.5, n), 0.3, 12.0)
@@ -107,12 +116,12 @@ class FakeSource(Source):
         t0 = _dt.datetime(2015, 1, 1)
         t1 = _dt.datetime(2024, 12, 31)
         dt = (t1 - t0).total_seconds()
-        times = [t0 + _dt.timedelta(seconds=float(s))
-                 for s in rng.uniform(0.0, dt, n)]
+        times = np.array([t0 + _dt.timedelta(seconds=float(s))
+                          for s in rng.uniform(0.0, dt, n)], dtype=object)
 
-        sc = rng.choice(_SPACECRAFT, size=n)
+        sc = rng.choice(_SPACECRAFT, size=n).astype(object)
 
-        df = pl.DataFrame({
+        data: dict[str, Any] = {
             "Time": times,
             "spacecraft": sc,
             "X_gsm": x.astype(np.float32),
@@ -132,33 +141,35 @@ class FakeSource(Source):
             "Beta_sw": beta_sw.astype(np.float32),
             "Ma_sw": ma_sw.astype(np.float32),
             "Tilt": tilt.astype(np.float32),
-        })
-        self._cache["magnetosheath"] = df
-        return df
+        }
+        self._cache["magnetosheath"] = data
+        return data
 
-    def _apply_filters(self, df: pl.DataFrame, kwargs: dict) -> pl.DataFrame:
+    def _apply_filters(self, data: dict[str, Any], kwargs: dict) -> dict[str, Any]:
         name_to_col = {n: c for (n, c, _u, _d) in _FILTER_CATALOG}
+        n = len(data["X_gsm"])
+        mask = np.ones(n, dtype=bool)
         for key, val in kwargs.items():
             if key.endswith("_min"):
                 name = key[:-4]
                 if name not in name_to_col:
                     raise ValueError(f"Unknown filter '{name}'")
-                df = df.filter(pl.col(name_to_col[name]) >= val)
+                mask &= data[name_to_col[name]] >= val
             elif key.endswith("_max"):
                 name = key[:-4]
                 if name not in name_to_col:
                     raise ValueError(f"Unknown filter '{name}'")
-                df = df.filter(pl.col(name_to_col[name]) <= val)
+                mask &= data[name_to_col[name]] <= val
             else:
                 raise ValueError(f"Filter kwargs must end with _min or _max; got {key}")
-        return df
+        return _mask_dict(data, mask)
 
-    def _events(self) -> pl.DataFrame:
+    def _events(self) -> dict[str, Any]:
         if "events" in self._cache:
             return self._cache["events"]
         rng = np.random.default_rng(self.seed + 1)
 
-        rows = []
+        rows: list[dict] = []
         mission_specs = [("MMS", 25, (2015, 2024)),
                          ("THEMIS", 20, (2007, 2024)),
                          ("Cluster", 15, (2001, 2024))]
@@ -188,14 +199,18 @@ class FakeSource(Source):
                     "year": int(paper["year"]),
                     "journal": paper["journal"],
                 })
-        df = pl.DataFrame(rows)
-        self._cache["events"] = df
-        return df
 
-    def _apply_event_filters(self, df: pl.DataFrame, kwargs: dict) -> pl.DataFrame:
+        keys = list(rows[0].keys())
+        data: dict[str, Any] = {k: np.array([row[k] for row in rows]) for k in keys}
+        self._cache["events"] = data
+        return data
+
+    def _apply_event_filters(self, data: dict[str, Any], kwargs: dict) -> dict[str, Any]:
+        n = len(data["mission"])
+        mask = np.ones(n, dtype=bool)
         for k, v in kwargs.items():
             if k == "mission":
-                df = df.filter(pl.col("mission").is_in(list(v)))
+                mask &= np.isin(data["mission"], list(v))
             else:
                 raise ValueError(f"Unknown events filter: {k}")
-        return df
+        return _mask_dict(data, mask)

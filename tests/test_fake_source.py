@@ -1,6 +1,4 @@
-import math
 import numpy as np
-import polars as pl
 import pytest
 from mango_explorer.data.fake import FakeSource
 
@@ -32,15 +30,15 @@ def test_filters_are_min_max_pairs(src):
         assert {"name", "column", "unit", "description", "params"} <= set(f.keys())
 
 
-def test_get_data_returns_polars_dataframe(src):
+def test_get_data_returns_dict_of_arrays(src):
     df = src.get_data("magnetosheath")
-    assert isinstance(df, pl.DataFrame)
-    assert len(df) > 0
+    assert isinstance(df, dict)
+    assert len(df["X_gsm"]) > 0
 
 
 def test_filters_respect_min_max(src):
     df = src.get_data("magnetosheath", ma_sw_min=3.0, ma_sw_max=5.0)
-    ma = df["Ma_sw"].to_numpy()
+    ma = df["Ma_sw"]
     assert ma.min() >= 3.0 - 1e-9
     assert ma.max() <= 5.0 + 1e-9
 
@@ -48,13 +46,12 @@ def test_filters_respect_min_max(src):
 def test_deterministic_with_seed():
     df1 = FakeSource(seed=42, n_points=1000).get_data("magnetosheath")
     df2 = FakeSource(seed=42, n_points=1000).get_data("magnetosheath")
-    assert df1.equals(df2)
+    np.testing.assert_array_equal(df1["X_gsm"], df2["X_gsm"])
 
 
 def test_points_lie_between_mp_and_bs(src):
     df = src.get_data("magnetosheath")
-    # D_msh in [0, 1]
-    d = df["D_msh"].to_numpy()
+    d = df["D_msh"]
     assert d.min() >= 0.0
     assert d.max() <= 1.0
 
@@ -77,9 +74,9 @@ def test_events_have_expected_columns(src):
 
 def test_events_mission_filter(src):
     df = src.get_data("events", mission=["MMS"])
-    assert set(df["mission"].unique().to_list()) <= {"MMS"}
+    assert set(df["mission"].tolist()) <= {"MMS"}
 
 
 def test_events_count_is_about_sixty(src):
     df = src.get_data("events")
-    assert 40 <= len(df) <= 100
+    assert 40 <= len(df["id"]) <= 100

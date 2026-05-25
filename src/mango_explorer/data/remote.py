@@ -6,7 +6,6 @@ implement these four methods using pyodide.http.pyfetch (in Pyodide) or httpx
 """
 from __future__ import annotations
 
-import polars as pl
 from .base import Source
 
 
@@ -23,5 +22,5 @@ class RemoteSource(Source):
     def columns(self, region: str) -> list[str]:
         raise NotImplementedError("RemoteSource is a POC stub")
 
-    def get_data(self, region: str, **kwargs) -> pl.DataFrame:
+    def get_data(self, region: str, **kwargs) -> dict:
         raise NotImplementedError("RemoteSource is a POC stub")

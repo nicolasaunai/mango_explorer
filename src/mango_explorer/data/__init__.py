@@ -5,7 +5,6 @@ The four public functions below proxy to the active Source instance.
 """
 from __future__ import annotations
 
-import polars as pl
 from .base import Source
 
 _active: Source | None = None
@@ -34,5 +33,5 @@ def columns(region: str) -> list[str]:
     return _require().columns(region)
 
 
-def get_data(region: str, **kwargs) -> pl.DataFrame:
+def get_data(region: str, **kwargs) -> dict:
     return _require().get_data(region, **kwargs)

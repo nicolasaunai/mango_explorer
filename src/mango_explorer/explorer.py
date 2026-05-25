@@ -47,11 +47,11 @@ def build_slice(plane: str, position: float, variable: str = "Np",
 def build_events(missions: list[str] | None = None) -> dict:
     kwargs = {"mission": missions} if missions else {}
     df = data.get_data("events", **kwargs)
-    pos = np.stack([
-        df["X_gsm"].to_numpy(),
-        df["Y_gsm"].to_numpy(),
-        df["Z_gsm"].to_numpy(),
-    ], axis=-1).astype(np.float32)
-    meta = df.select(["id", "mission", "date", "type", "doi",
-                      "title", "authors", "year", "journal"]).to_dicts()
+    pos = np.stack([df["X_gsm"], df["Y_gsm"], df["Z_gsm"]], axis=-1).astype(np.float32)
+    keys = ["id", "mission", "date", "type", "doi", "title", "authors", "year", "journal"]
+    n = len(df["id"])
+    meta = [
+        {k: (df[k][i].item() if hasattr(df[k][i], "item") else df[k][i]) for k in keys}
+        for i in range(n)
+    ]
     return {"positions": pos, "meta": meta}

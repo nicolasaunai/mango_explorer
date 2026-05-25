@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-import polars as pl
 
 
 class Source(ABC):
@@ -17,4 +16,4 @@ class Source(ABC):
     def columns(self, region: str) -> list[str]: ...
 
     @abstractmethod
-    def get_data(self, region: str, **kwargs) -> pl.DataFrame: ...
+    def get_data(self, region: str, **kwargs) -> dict: ...
