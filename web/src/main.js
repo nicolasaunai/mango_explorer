@@ -12,7 +12,14 @@ function asUint32(a)  { return a instanceof Uint32Array  ? a : new Uint32Array(a
 
 const loading = document.getElementById('loading');
 loading.textContent = 'Loading Pyodide…';
-await bridge.init();
+try {
+  await bridge.init(msg => { loading.textContent = msg; });
+} catch (e) {
+  loading.textContent = '❌ Init failed — see console';
+  loading.style.color = '#f66';
+  console.error('FULL ERROR:', e.message ?? e);
+  throw e;
+}
 loading.remove();
 
 const { scene, camera, controls } = createScene(document.getElementById('viewport'));
