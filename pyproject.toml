@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mango_explorer"
+version = "0.0.1"
+description = "Interactive magnetosphere explorer (POC)"
+requires-python = ">=3.11"
+authors = [{name = "Nicolas Aunai", email = "nicolas.aunai@lpp.polytechnique.fr"}]
+dependencies = [
+  "numpy>=1.26",
+  "polars>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mango_explorer"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
