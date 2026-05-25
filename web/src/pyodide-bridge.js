@@ -12,7 +12,7 @@ export async function init(onStatus = () => {}) {
   onStatus('Fetching wheel index…');
   const wheels = await fetch('./wheels/index.json').then(r => r.json());
   onStatus('Installing mango_explorer…');
-  await py.runPythonAsync(`await micropip.install('${wheels.url}')`);
+  await py.runPythonAsync(`import micropip; await micropip.install('${wheels.url}')`);
   onStatus('Initialising data source…');
   await py.runPythonAsync(`
 import mango_explorer
