@@ -1,0 +1,146 @@
+"""Deterministic synthetic MANGO-shaped source for the POC."""
+from __future__ import annotations
+
+import datetime as _dt
+from typing import Final
+
+import numpy as np
+import polars as pl
+
+from .base import Source
+from ..boundaries import shue_mp, jelinek_bs
+
+_SPACECRAFT: Final = ["MMS1", "THA", "C1"]
+
+# Filter catalog: (name, column, unit, description)
+_FILTER_CATALOG: Final = [
+    ("bz_imf", "Bz_imf", "nT",   "IMF Bz (GSM)"),
+    ("by_imf", "By_imf", "nT",   "IMF By (GSM)"),
+    ("pd_sw",  "Pd_sw",  "nPa",  "Solar wind dynamic pressure"),
+    ("ma_sw",  "Ma_sw",  "",     "Solar wind Alfvén Mach number"),
+    ("vx_sw",  "Vx_sw",  "km/s", "Solar wind Vx (GSM)"),
+    ("np_sw",  "Np_sw",  "cm-3", "Solar wind proton density"),
+]
+
+
+def _compression_ratio(mach: np.ndarray, gamma: float = 5.0 / 3.0) -> np.ndarray:
+    m2 = mach * mach
+    return ((gamma + 1.0) * m2) / ((gamma - 1.0) * m2 + 2.0)
+
+
+class FakeSource(Source):
+    """Deterministic fake MANGO data source."""
+
+    def __init__(self, seed: int = 42, n_points: int = 50_000):
+        self.seed = seed
+        self.n_points = n_points
+        self._cache: dict[str, pl.DataFrame] = {}
+
+    def regions(self) -> list[str]:
+        return ["magnetosheath"]
+
+    def filters(self, region: str) -> list[dict]:
+        if region != "magnetosheath":
+            raise ValueError(f"Unknown region: {region}")
+        return [
+            {"name": n, "column": c, "unit": u, "description": d,
+             "params": f"{n}_min=..&{n}_max=.."}
+            for (n, c, u, d) in _FILTER_CATALOG
+        ]
+
+    def columns(self, region: str) -> list[str]:
+        return self._magnetosheath().columns
+
+    def get_data(self, region: str, **kwargs) -> pl.DataFrame:
+        if region != "magnetosheath":
+            raise ValueError(f"Unknown region: {region}")
+        df = self._magnetosheath()
+        return self._apply_filters(df, kwargs)
+
+    def _magnetosheath(self) -> pl.DataFrame:
+        if "magnetosheath" in self._cache:
+            return self._cache["magnetosheath"]
+
+        rng = np.random.default_rng(self.seed)
+        n = self.n_points
+
+        theta = np.arccos(1.0 - 0.85 * rng.random(n))  # bias toward subsolar
+        phi = rng.uniform(0.0, 2.0 * np.pi, n)
+        d = rng.uniform(0.0, 1.0, n)  # 0 = at BS, 1 = at MP
+
+        ma_sw = np.clip(rng.lognormal(mean=np.log(6.0), sigma=0.3, size=n), 1.0, 12.0)
+        pd_sw = np.clip(0.5 + 0.4 * (ma_sw - 6.0) + rng.normal(0.0, 0.5, n), 0.3, 12.0)
+        bz_imf = rng.normal(0.0, 4.0, n)
+        by_imf = rng.normal(0.0, 4.0, n)
+        bx_imf = rng.normal(0.0, 3.0, n)
+        np_sw = np.clip(rng.lognormal(mean=np.log(5.0), sigma=0.4, size=n), 0.5, 50.0)
+        tp_sw = np.clip(rng.lognormal(mean=np.log(1e5), sigma=0.3, size=n), 1e3, 1e7)
+        vx_sw = -np.clip(rng.normal(450.0, 80.0, n), 250.0, 900.0)
+        beta_sw = np.clip(rng.lognormal(mean=np.log(1.0), sigma=0.5, size=n), 0.05, 20.0)
+        tilt = rng.uniform(-30.0, 30.0, n)
+
+        r_mp = shue_mp(theta, r0=10.5, alpha=0.6)
+        r_bs = jelinek_bs(theta, pd=2.0)
+        r = r_bs * (1.0 - d) + r_mp * d
+
+        x = r * np.cos(theta)
+        y = r * np.sin(theta) * np.cos(phi)
+        z = r * np.sin(theta) * np.sin(phi)
+
+        n_sw_base = 5.0
+        comp = _compression_ratio(ma_sw)
+        stagnation = 1.0 + 1.2 * d ** 1.5
+        angular = 0.6 + 0.4 * np.clip(np.cos(theta), 0.0, 1.0) ** 0.5
+        local_np = n_sw_base * comp * stagnation * angular
+
+        local_tp = tp_sw * (1.0 + 8.0 * d)
+        local_bz = bz_imf * (1.5 + 0.5 * d) + rng.normal(0.0, 0.5, n)
+
+        t0 = _dt.datetime(2015, 1, 1)
+        t1 = _dt.datetime(2024, 12, 31)
+        dt = (t1 - t0).total_seconds()
+        times = [t0 + _dt.timedelta(seconds=float(s))
+                 for s in rng.uniform(0.0, dt, n)]
+
+        sc = rng.choice(_SPACECRAFT, size=n)
+
+        df = pl.DataFrame({
+            "Time": times,
+            "spacecraft": sc,
+            "X_gsm": x.astype(np.float32),
+            "Y_gsm": y.astype(np.float32),
+            "Z_gsm": z.astype(np.float32),
+            "D_msh": d.astype(np.float32),
+            "Np": local_np.astype(np.float32),
+            "Tp": local_tp.astype(np.float32),
+            "Bz": local_bz.astype(np.float32),
+            "Bx_imf": bx_imf.astype(np.float32),
+            "By_imf": by_imf.astype(np.float32),
+            "Bz_imf": bz_imf.astype(np.float32),
+            "Pd_sw": pd_sw.astype(np.float32),
+            "Np_sw": np_sw.astype(np.float32),
+            "Tp_sw": tp_sw.astype(np.float32),
+            "Vx_sw": vx_sw.astype(np.float32),
+            "Beta_sw": beta_sw.astype(np.float32),
+            "Ma_sw": ma_sw.astype(np.float32),
+            "Tilt": tilt.astype(np.float32),
+        })
+        self._cache["magnetosheath"] = df
+        return df
+
+    def _apply_filters(self, df: pl.DataFrame, kwargs: dict) -> pl.DataFrame:
+        name_to_col = {n: c for (n, c, _u, _d) in _FILTER_CATALOG}
+        for key, val in kwargs.items():
+            if key.endswith("_min"):
+                name = key[:-4]
+                if name not in name_to_col:
+                    raise ValueError(f"Unknown filter '{name}'")
+                df = df.filter(pl.col(name_to_col[name]) >= val)
+            elif key.endswith("_max"):
+                name = key[:-4]
+                if name not in name_to_col:
+                    raise ValueError(f"Unknown filter '{name}'")
+                df = df.filter(pl.col(name_to_col[name]) <= val)
+            else:
+                raise ValueError(f"Filter kwargs must end with _min or _max; got {key}")
+        return df
