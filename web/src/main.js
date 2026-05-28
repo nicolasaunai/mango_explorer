@@ -47,7 +47,7 @@ async function rebuildEvents(missions) {
 const slice = new SliceLayer(scene, 25, 256);
 async function refreshSlice() {
   const out = await bridge.buildSlice({
-    plane: state.plane, position: state.position, variable: 'Np',
+    plane: state.plane, position: state.position, variable: state.variable,
     extent: 25, n: 256, slab: 2.0,
     filters: { ma_sw_min: state.machMin, ma_sw_max: state.machMax },
   });
@@ -61,6 +61,7 @@ const state = {
   'chk-slice': false,
   r0: 10.5, position: 0.0, opacity: 0.8,
   plane: 'xy', machMin: 1.0, machMax: 10.0,
+  variable: 'Np',
 };
 
 function currentMissions() {
@@ -82,7 +83,7 @@ buildSidebar(document.getElementById('sidebar'), state, async (key, val) => {
     await rebuildEvents(currentMissions());
   }
   else if (key === 'chk-slice') { if (val) { slice.show(); await refreshSlice(); } else slice.hide(); }
-  else if (key === 'plane' || key === 'position' || key === 'mach') {
+  else if (key === 'plane' || key === 'position' || key === 'mach' || key === 'variable') {
     if (state['chk-slice']) await refreshSlice();
   }
   else if (key === 'opacity') slice.setOpacity(val);

@@ -29,6 +29,19 @@ def test_build_slice_returns_rgba_and_meta():
     assert "vmin" in out and "vmax" in out and "ticks" in out
 
 
+def test_build_slice_bz_has_symmetric_range():
+    out = explorer.build_slice(plane="xy", position=0.0, variable="Bz",
+                               extent=25.0, n=32)
+    assert out["vmin"] == pytest.approx(-out["vmax"], abs=1e-6)
+
+
+def test_build_slice_tp_has_positive_range():
+    out = explorer.build_slice(plane="xy", position=0.0, variable="Tp",
+                               extent=25.0, n=32)
+    assert out["vmin"] >= 0.0
+    assert out["vmax"] > out["vmin"]
+
+
 def test_build_events_returns_positions_and_metadata():
     out = explorer.build_events(missions=["MMS", "THEMIS"])
     assert out["positions"].dtype == np.float32

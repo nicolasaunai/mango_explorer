@@ -14,8 +14,15 @@ export function buildSidebar(root, state, onChange) {
     <label><input type="checkbox" id="chk-themis" checked> THEMIS</label><br>
     <label><input type="checkbox" id="chk-cluster" checked> Cluster</label>
 
-    <h2>Density slice</h2>
+    <h2>Slice</h2>
     <label><input type="checkbox" id="chk-slice"> Show plane</label>
+    <div style="margin:6px 0;">
+      <select id="variable" style="width:100%;background:#222;color:#ccc;border:1px solid #444;padding:3px;">
+        <option value="Np">Np — proton density [cm⁻³]</option>
+        <option value="Tp">Tp — proton temperature [K]</option>
+        <option value="Bz">Bz — magnetic field Bz [nT]</option>
+      </select>
+    </div>
     <div>
       <button data-plane="xy">XY</button>
       <button data-plane="xz">XZ</button>
@@ -57,6 +64,8 @@ export function buildSidebar(root, state, onChange) {
   ['chk-mp','chk-bs','chk-mms','chk-themis','chk-cluster','chk-slice'].forEach(id => {
     wire(id, 'change', e => e.checked, id);
   });
+
+  wire('variable', 'change', e => e.value, 'variable');
 
   root.querySelector('#r0').addEventListener('input', e => {
     root.querySelector('#r0-val').textContent = e.target.value;

@@ -44,18 +44,30 @@ def _orient_texture(rgba: np.ndarray, plane: str) -> np.ndarray:
     return rgba
 
 
+_VARIABLE_META = {
+    "Np":  {"label": "Np [cm⁻³]",  "cmap": "jet",  "symmetric": False},
+    "Tp":  {"label": "Tp [K]",      "cmap": "jet",  "symmetric": False},
+    "Bz":  {"label": "Bz [nT]",     "cmap": "rdbu", "symmetric": True},
+}
+
+
 def build_slice(plane: str, position: float, variable: str = "Np",
                 extent: float = 25.0, n: int = 128, slab: float = 2.0,
                 filters: dict | None = None) -> dict:
     df = data.get_data("magnetosheath", **(filters or {}))
     grid, mask = bin_scattered_2d(df, plane=plane, position=position,
                                   variable=variable, extent=extent, n=n, slab=slab)
+    meta = _VARIABLE_META.get(variable, {"cmap": "jet", "symmetric": False})
     if mask.any():
-        vmin = float(np.nanpercentile(grid[mask], 2))
-        vmax = float(np.nanpercentile(grid[mask], 98))
+        if meta["symmetric"]:
+            abs_max = float(np.nanpercentile(np.abs(grid[mask]), 98))
+            vmin, vmax = -abs_max, abs_max
+        else:
+            vmin = float(np.nanpercentile(grid[mask], 2))
+            vmax = float(np.nanpercentile(grid[mask], 98))
     else:
-        vmin, vmax = 0.0, 1.0
-    rgba = _orient_texture(to_rgba(grid, vmin=vmin, vmax=vmax, mask=mask), plane)
+        vmin, vmax = -1.0, 1.0
+    rgba = _orient_texture(to_rgba(grid, vmin=vmin, vmax=vmax, mask=mask, cmap=meta["cmap"]), plane)
     cb = colorbar_info(vmin, vmax)
     return {"rgba": rgba.ravel(), "vmin": cb["vmin"], "vmax": cb["vmax"], "ticks": cb["ticks"]}
 
