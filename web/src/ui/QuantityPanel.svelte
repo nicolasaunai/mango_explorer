@@ -83,6 +83,8 @@
       <input type="checkbox" disabled={!fold} checked={app.layers.includes('tint')} onchange={() => toggleLayer('tint')} />
       <span>Shock tinted by θ<sub>Bn</sub>{#if !fold}<span class="muted small"> (needs fold)</span>{/if}</span></label>
     <label class="opt"><input type="checkbox" checked={app.layers.includes('shells')} onchange={() => toggleLayer('shells')} /><span>D<sub>msh</sub> = 0.5 shell</span></label>
+    <label class="opt" class:off={app.frame === 'GSM'} title="In PGSM, +Z is the IMF direction; this arrow shows where the GSM Z axis (the dipole) lies for the selected clock angles">
+      <input type="checkbox" disabled={app.frame === 'GSM'} checked={app.layers.includes('zgsm')} onchange={() => toggleLayer('zgsm')} /><span>Z<sub>GSM</sub> direction</span></label>
     <label class="opt" title="Hatch cells whose samples come from few spacecraft passes (distinct spacecraft-hours): bins N_eff &lt; {grid.reliability.min_neff}, k-NN &lt; {grid.raw.knn.min_neff}">
       <input type="checkbox" checked={app.neff} onchange={() => patch({ neff: !app.neff })} /><span>Flag few-pass cells (N<sub>eff</sub>)</span></label>
   </div>

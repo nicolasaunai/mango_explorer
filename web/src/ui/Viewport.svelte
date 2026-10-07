@@ -49,6 +49,7 @@
       showBs: app.layers.includes('bs'),
       tint: app.layers.includes('tint'),
       shells: app.layers.includes('shells'),
+      zgsm: app.layers.includes('zgsm'),
       rMp: BOUNDARIES.rMp, rBs: BOUNDARIES.rBs,
     });
   });

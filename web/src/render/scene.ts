@@ -17,6 +17,8 @@ export type SceneInputs = {
   showBs: boolean;
   tint: boolean;
   shells: boolean;
+  /** draw where Z_GSM (the dipole axis) points for the selected clock sector; off by default */
+  zgsm: boolean;
   rMp: RadiusFn;
   rBs: RadiusFn;
 };
@@ -215,7 +217,7 @@ export class SceneView {
     this.labels.imf.visible = showClock;
     this.labels.imf.position.copy(new THREE.Vector3(21, 0, 0).add(b.clone().multiplyScalar(8.4)));
 
-    const z = p.frame === 'GSM' || p.clockDeg === null ? null : toThree(zGsmDirection(p.frame, clock, 1)).normalize();
+    const z = !p.zgsm || p.frame === 'GSM' || p.clockDeg === null ? null : toThree(zGsmDirection(p.frame, clock, 1)).normalize();
     this.zArrow.visible = this.labels.zgsm.visible = !!z;
     if (z) { this.zArrow.setDirection(z); this.labels.zgsm.position.copy(z.multiplyScalar(9)); }
 

@@ -12,7 +12,7 @@ export const N_MA = grid.conditionEdges('Ma_sw').length - 1;
 export const VIEWS = ['iso', 'sun', 'dusk', 'north', 'tail'] as const;
 export const STATS = ['median', 'q25', 'q75', 'iqr_rel', 'n', 'neff'] as const;
 export const PLANES = ['XY', 'XZ', 'YZ'] as const;
-export const LAYERS = ['mp', 'bs', 'tint', 'shells', 'slice'] as const;
+export const LAYERS = ['mp', 'bs', 'tint', 'shells', 'slice', 'zgsm'] as const;
 
 export const ViewState = z.object({
   frame: z.enum(['GSM', 'PGSM', 'PGSM_fold']),
