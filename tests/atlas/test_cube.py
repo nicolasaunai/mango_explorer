@@ -100,7 +100,7 @@ def test_hour_table_counts_match_rows(df, prep):
 def test_atlas_round_trip(tmp_path, df, cubes):
     build_atlas(iter_polars(df, 15_000), G, tmp_path, log=lambda *_: None)
     manifest, read, hours = read_atlas(tmp_path)
-    assert manifest["grid"] == "grid-v1"
+    assert manifest["grid"] == "grid-v2"
     by_frame = {c.frame: c for c in read}
     for frame, cube in cubes.items():
         a, b = cube.query({"clock_deg": [1, 2]}), by_frame[frame].query({"clock_deg": [1, 2]})

@@ -16,15 +16,15 @@
   // Re-run the statistics whenever anything they depend on changes; the worker answers the latest.
   $effect(() => {
     if (data.status !== 'ready' || app.source !== 'bins') return;
-    runQuery(app.frame, app.quantity, app.stat, selectionOf(app));
+    runQuery(app.frame, app.quantity, app.stat, selectionOf(app), app.neff);
   });
   $effect(() => {
     if (data.status !== 'ready' || app.source !== 'knn') return;
-    runKnn(app.frame, app.quantity, app.stat, selectionOf(app), app.plane, app.shell, app.k, app.cap);
+    runKnn(app.frame, app.quantity, app.stat, selectionOf(app), app.plane, app.shell, app.k, app.cap, app.neff);
   });
   $effect(() => {
     if (data.status !== 'ready' || !app.pinA || app.source !== 'bins') return;
-    runQuery(app.frame, app.quantity, app.stat, selectionOf(app.pinA), 'A');
+    runQuery(app.frame, app.quantity, app.stat, selectionOf(app.pinA), app.neff, 'A');
   });
 
   let tab = $state<'cond' | 'qty' | 'views'>('cond');

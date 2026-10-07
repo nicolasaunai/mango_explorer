@@ -4,6 +4,7 @@
   import { formatValue, ticks } from '../core/compute';
   import { LUT_NAMES, lutBytes, lutColor } from '../render/lut';
   import { quantityTitle } from './format';
+  import { grid } from '../core/grid';
 
   const shown = $derived(display.shown);
   const range = $derived(shown?.range ?? null);
@@ -35,7 +36,7 @@
     </select>
   </div>
   {#if diff}<p class="hint">Hatched: unreliable in A or B, or |z| &lt; 2 (approximate, from N<sub>eff</sub> upper bounds).</p>
-  {:else if !app.range}<p class="hint">Auto range: 2nd–98th percentile of reliable cells.</p>{/if}
+  {:else if !app.range}<p class="hint">Auto range: 2nd–98th percentile of cells with ≥ {grid.reliability.min_n} samples{app.neff ? ' and enough passes' : ''}.</p>{/if}
 </div>
 
 <style>

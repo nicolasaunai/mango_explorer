@@ -14,12 +14,12 @@ export const isLogScale = (q: QuantityName, stat: Stat, g: Grid = defaultGrid) =
 export const toPhysical = (v: number, q: QuantityName, stat: Stat, g: Grid = defaultGrid) =>
   isLogScale(q, stat, g) ? 10 ** v : v;
 
-/** Reliability per cell: empty, weak (N_eff or N below the thresholds) or OK. */
-export function cellFlags(n: ArrayLike<number>, neff: ArrayLike<number>, g: Grid = defaultGrid): Uint8Array {
+/** Reliability per cell: empty, weak (too few samples, or with the N_eff overlay too few passes) or OK. */
+export function cellFlags(n: ArrayLike<number>, neff: ArrayLike<number>, g: Grid = defaultGrid, useNeff = false): Uint8Array {
   const { min_neff, min_n } = g.reliability;
   const out = new Uint8Array(n.length);
   for (let c = 0; c < n.length; c++)
-    out[c] = n[c] === 0 ? FLAG.EMPTY : neff[c] < min_neff || n[c] < min_n ? FLAG.WEAK : FLAG.OK;
+    out[c] = n[c] === 0 ? FLAG.EMPTY : n[c] < min_n || (useNeff && neff[c] < min_neff) ? FLAG.WEAK : FLAG.OK;
   return out;
 }
 

@@ -23,9 +23,7 @@ COLUMNS = (
     "R_norm", "Norma_pos", "SW_pairing", "X_gsm_norm", "Y_gsm_norm", "Z_gsm_norm",
 )
 
-_FINITE_REQUIRED = (
-    "Bx_imf", "By_imf", "Bz_imf", "R_norm", "X_gsm_norm", "Y_gsm_norm", "Z_gsm_norm",
-)
+_FINITE_REQUIRED = ("Bx_imf", "By_imf", "Bz_imf", "X_gsm_norm", "Y_gsm_norm", "Z_gsm_norm")
 
 
 def _norm(x, y, z):
@@ -67,6 +65,16 @@ def quantity_values(cols: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
             "Tp_ratio": cols["Tp"] / cols["Tp_sw"],
             "V_ratio": v / v_sw,
         }
+
+
+def geometric_depth(cols: dict[str, np.ndarray], grid: Grid) -> np.ndarray:
+    """Depth of the normalized position between MANGO's reference boundaries (0 = MP, 1 = BS)."""
+    x, y, z = (np.asarray(cols[c], dtype=float) for c in ("X_gsm_norm", "Y_gsm_norm", "Z_gsm_norm"))
+    r = np.sqrt(x * x + y * y + z * z)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        theta = np.arccos(np.clip(x / r, -1.0, 1.0))
+        r_mp, r_bs = grid.reference_radii()
+        return (r - r_mp(theta)) / (r_bs(theta) - r_mp(theta))
 
 
 def normalized_angles(cols: dict[str, np.ndarray], frame: str) -> tuple[np.ndarray, np.ndarray]:

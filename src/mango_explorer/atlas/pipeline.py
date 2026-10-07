@@ -14,13 +14,13 @@ from mango_explorer.atlas.store import write_atlas
 
 
 def build_atlas(chunks, grid: Grid, out_dir: Path, *, frames=None, cube_ids=None,
-                source: dict | None = None, sample_window_s: float | None = None, log=print) -> dict:
+                source: dict | None = None, sample_fraction: float | None = None, log=print) -> dict:
     frames = tuple(frames or grid.frames)
     cube_ids = tuple(cube_ids or [c["id"] for c in grid.raw["cubes"]])
     accs = [CubeAccumulator(grid, cid, f) for cid in cube_ids for f in frames]
     hours = HourAccumulator(grid)
-    window = grid.raw["knn"]["sample_window_s"] if sample_window_s is None else sample_window_s
-    samples = SampleAccumulator(grid, cube_ids[0], window)
+    fraction = grid.raw["knn"]["sample_fraction"] if sample_fraction is None else sample_fraction
+    samples = SampleAccumulator(grid, cube_ids[0], fraction)
     stats = Counter()
     t0 = time.perf_counter()
     for cols in chunks:
@@ -37,5 +37,5 @@ def build_atlas(chunks, grid: Grid, out_dir: Path, *, frames=None, cube_ids=None
     manifest = write_atlas(out_dir, grid, cubes, hours.finalize(), {
         "source": source or {}, "stats": dict(stats),
         "build_seconds": round(time.perf_counter() - t0, 2),
-    }, samples={"table": samples.finalize(), "cube": cube_ids[0], "window_s": window})
+    }, samples={"table": samples.finalize(), "cube": cube_ids[0], "fraction": fraction})
     return manifest

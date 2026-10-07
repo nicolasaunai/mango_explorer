@@ -123,22 +123,22 @@ describe('k-NN', () => {
     const buf = await readFile(root + p);
     return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
   };
+  it('reference boundaries match Python', async () => {
+    const { DISPLAY_BOUNDARIES: b } = await import('./display');
+    const ref = golden.reference;
+    ref.theta_rad.forEach((t, i) => { close(b.rMp(t), ref.mp[i]); close(b.rBs(t), ref.bs[i]); });
+  });
   it('reproduces the Python k-NN statistics', async () => {
     const { SampleTable } = await import('./atlas');
-    const { SpatialHash, displayPosition, framePhi, knnAt } = await import('./knn');
-    const { jelinekBs, shueAlpha, shueMp, shueR0 } = await import('./boundaries');
+    const { SpatialHash, framePosition, knnAt } = await import('./knn');
     const ref = golden.atlas_mini, kn = ref.knn;
-    const db = grid.raw.display_boundaries;
-    const r0 = shueR0(db.bz_nT, db.pd_nPa), al = shueAlpha(db.bz_nT, db.pd_nPa);
-    const b = { rMp: (t: number) => shueMp(t, r0, al), rBs: (t: number) => jelinekBs(t, db.pd_nPa) };
     const table = await SampleTable.load(await loadManifest(fetchBytes), fetchBytes);
     const rows = table.rows(ref.selection);
     expect(rows.length).toBe(kn.n_samples);
     const t = table.base, vals = await table.quantity('Np_ratio');
     const pos = new Float64Array(rows.length * 3), v = new Float64Array(rows.length), iv = new Float64Array(rows.length);
     rows.forEach((r, i) => {
-      const phi = framePhi('PGSM_fold', t.phi_gsm[r], t.clock_deg[r], t.bx_neg[r] === 1);
-      pos.set(displayPosition(t.d[r], t.theta[r], phi, b), 3 * i);
+      pos.set(framePosition('PGSM_fold', t.x[r], t.y[r], t.z[r], t.clock_deg[r], t.bx_neg[r] === 1), 3 * i);
       v[i] = vals[r]; iv[i] = t.interval[r];
     });
     const hash = new SpatialHash(pos, kn.cap);

@@ -33,6 +33,7 @@ export const ViewState = z.object({
   source: z.enum(['bins', 'knn']),
   k: z.number().int().min(5).max(500),
   cap: z.number().min(0.25).max(10),
+  neff: z.boolean(),
 });
 export type ViewState = z.infer<typeof ViewState>;
 
@@ -56,6 +57,7 @@ export const DEFAULT_STATE: ViewState = {
   source: 'bins',
   k: grid.raw.knn.k,
   cap: grid.raw.knn.cap_re,
+  neff: grid.raw.neff.overlay_default,
 };
 
 export const PRESETS: { id: string; label: string; hint: string; state: Partial<ViewState> }[] = [
@@ -77,6 +79,7 @@ export function encodeHash(s: ViewState): string {
   });
   if (s.probe >= 0) p.set('pr', String(s.probe));
   if (s.range) p.set('cr', s.range.map((x) => +x.toPrecision(5)).join('~'));
+  if (s.neff !== DEFAULT_STATE.neff) p.set('ne', s.neff ? '1' : '0');
   if (s.source === 'knn') { p.set('src', 'knn'); p.set('k', String(s.k)); p.set('cap', String(s.cap)); }
   if (s.pinA) { p.set('pa', [s.pinA.clock, s.pinA.cone, s.pinA.ma].map(list).join('~')); p.set('cmp', s.cmp); }
   return '#' + p.toString();
@@ -99,6 +102,7 @@ export function decodeHash(hash: string): ViewState {
     source: p.get('src') ?? undefined,
     k: p.has('k') ? Number(p.get('k')) : undefined,
     cap: p.has('cap') ? Number(p.get('cap')) : undefined,
+    neff: p.has('ne') ? p.get('ne') === '1' : undefined,
   };
   const out = { ...DEFAULT_STATE } as Record<string, unknown>;
   for (const [k, v] of Object.entries(candidate)) {

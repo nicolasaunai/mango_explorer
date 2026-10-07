@@ -9,6 +9,7 @@ from mango_explorer.atlas.binning import condition_bins, hist_bins, spatial_cell
 from mango_explorer.atlas.grid import Grid
 from mango_explorer.atlas.quantities import (
     condition_values,
+    geometric_depth,
     interval_ids,
     normalized_angles,
     quantity_values,
@@ -33,6 +34,7 @@ class Prepared:
     bx_neg: np.ndarray | None = None
     t_ns: np.ndarray | None = None
     values: dict[str, np.ndarray] | None = None
+    xyz: np.ndarray | None = None  # normalized GSM positions (n, 3)
 
 
 def prepare(cols: dict[str, np.ndarray], grid: Grid, frames=None) -> Prepared:
@@ -43,10 +45,11 @@ def prepare(cols: dict[str, np.ndarray], grid: Grid, frames=None) -> Prepared:
     cvals = condition_values(kept)
     conds = condition_bins(cvals, grid)
     qvals = quantity_values(kept)
+    depth = geometric_depth(kept, grid)
     cells = {}
     for frame in frames:
         theta, phi = normalized_angles(kept, frame)
-        cells[frame] = spatial_cells(kept["R_norm"], theta, phi, grid)
+        cells[frame] = spatial_cells(depth, theta, phi, grid)
     any_frame = next(iter(cells.values()))
     theta_gsm, phi_gsm = normalized_angles(kept, "GSM")
     return Prepared(
@@ -60,7 +63,8 @@ def prepare(cols: dict[str, np.ndarray], grid: Grid, frames=None) -> Prepared:
             "row_filter": int(n_in - mask.sum()),
             "outside_shell_or_theta": int((any_frame < 0).sum()),
         },
-        d=np.asarray(kept["R_norm"], dtype=float),
+        d=depth,
+        xyz=np.stack([np.asarray(kept[c], dtype=float) for c in ("X_gsm_norm", "Y_gsm_norm", "Z_gsm_norm")], 1),
         theta=theta_gsm,
         phi_gsm=phi_gsm,
         clock_deg=cvals["clock_deg"],

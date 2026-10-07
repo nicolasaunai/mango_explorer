@@ -17,4 +17,11 @@ const jelinek = (theta: number, pd: number, r: number, eps: number, lam: number)
   return (2 * r * pd ** (-1 / eps)) / (c + Math.sqrt(c * c + (lam * s) ** 2));
 };
 export const jelinekBs = (theta: number, pd: number) => jelinek(theta, pd, 15.02, 6.55, 1.17);
+/** Axisymmetric paraboloid x = nose - rho^2/(4p) as r(theta); MANGO's reference surfaces have this form. */
+export function paraboloidR(theta: number, nose: number, p: number): number {
+  const a = Math.sin(theta) ** 2, b = 4 * p * Math.cos(theta);
+  const disc = Math.sqrt(b * b + 16 * p * nose * a);
+  return b >= 0 ? (8 * p * nose) / (b + disc) : (disc - b) / (2 * a);
+}
+
 export const jelinekMp = (theta: number, pd: number) => jelinek(theta, pd, 12.82, 5.26, 1.54);

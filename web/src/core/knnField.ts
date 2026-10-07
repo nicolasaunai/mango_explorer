@@ -4,7 +4,7 @@ import type { SampleTable, Selection } from './atlas';
 import type { Boundaries } from './geometry';
 import { normalizedCoords } from './geometry';
 import { FLAG, type ProfilePoint, type Stat, isLogScale } from './compute';
-import { SpatialHash, displayPosition, framePhi, knnAt, type KnnResult } from './knn';
+import { SpatialHash, framePosition, knnAt, positionAt, type KnnResult } from './knn';
 
 export type Plane = 'XY' | 'XZ' | 'YZ';
 export const FIELD_N = 192;
@@ -17,14 +17,14 @@ export function planePoint(plane: Plane, u: number, v: number): [number, number,
 
 export type KnnSamples = { hash: SpatialHash; values: Float64Array; intervals: Float64Array; n: number };
 
-/** Positions of the selected samples in the frame's displayed sheath, indexed for search. */
+/** Normalized positions of the selected samples in `frame`, indexed for search. */
 export function buildSamples(table: SampleTable, values: Float32Array, frame: FrameName, sel: Selection,
-  b: Boundaries, cap: number): KnnSamples {
+  cap: number): KnnSamples {
   const t = table.base;
   const rows = Array.from(table.rows(sel)).filter((r) => Number.isFinite(values[r]));
   const pos = new Float64Array(rows.length * 3), v = new Float64Array(rows.length), iv = new Float64Array(rows.length);
   rows.forEach((r, i) => {
-    pos.set(displayPosition(t.d[r], t.theta[r], framePhi(frame, t.phi_gsm[r], t.clock_deg[r], t.bx_neg[r] === 1), b), 3 * i);
+    pos.set(framePosition(frame, t.x[r], t.y[r], t.z[r], t.clock_deg[r], t.bx_neg[r] === 1), 3 * i);
     v[i] = values[r]; iv[i] = t.interval[r];
   });
   return { hash: new SpatialHash(pos, cap), values: v, intervals: iv, n: rows.length };
@@ -45,11 +45,11 @@ export function knnValue(r: KnnResult, q: QuantityName, stat: Stat, g: Grid = de
   }
 }
 
-export function knnFlag(r: KnnResult, minNeff: number): number {
-  return !Number.isFinite(r.median) ? FLAG.EMPTY : r.neff < minNeff ? FLAG.WEAK : FLAG.OK;
+export function knnFlag(r: KnnResult, minNeff: number, useNeff: boolean): number {
+  return !Number.isFinite(r.median) ? FLAG.EMPTY : useNeff && r.neff < minNeff ? FLAG.WEAK : FLAG.OK;
 }
 
-export type KnnOptions = { k: number; cap: number; factor: number; minNeff: number };
+export type KnnOptions = { k: number; cap: number; factor: number; minNeff: number; useNeff: boolean };
 
 export function knnField(s: KnnSamples, q: QuantityName, stat: Stat, plane: Plane, shell: number,
   b: Boundaries, o: KnnOptions, g: Grid = defaultGrid) {
@@ -66,7 +66,7 @@ export function knnField(s: KnnSamples, q: QuantityName, stat: Stat, plane: Plan
       if (!(d >= 0 && d <= 1) || thetaDeg >= thetaMax) continue;
       const r = at(p);
       field[j * FIELD_N + i] = knnValue(r, q, stat, g);
-      fieldFlags[j * FIELD_N + i] = knnFlag(r, o.minNeff);
+      fieldFlags[j * FIELD_N + i] = knnFlag(r, o.minNeff, o.useNeff);
     }
 
   // shell map: one node per (theta, phi) bin centre on the middle of the selected shell
@@ -76,9 +76,9 @@ export function knnField(s: KnnSamples, q: QuantityName, stat: Stat, plane: Plan
   for (let j = 0; j < nt; j++)
     for (let k = 0; k < nphi; k++) {
       const th = (g.thetaEdges[j] + g.thetaEdges[j + 1]) / 2, ph = (g.phiEdges[k] + g.phiEdges[k + 1]) / 2;
-      const r = at(displayPosition(dMid, th, ph, b));
+      const r = at(positionAt(dMid, th, ph, b));
       shellValues[j * nphi + k] = knnValue(r, q, stat, g);
-      shellFlags[j * nphi + k] = knnFlag(r, o.minNeff);
+      shellFlags[j * nphi + k] = knnFlag(r, o.minNeff, o.useNeff);
     }
 
   // profile along the Sun-Earth line, magnetopause to bow shock
@@ -86,7 +86,7 @@ export function knnField(s: KnnSamples, q: QuantityName, stat: Stat, plane: Plan
   const nProf = 20;
   for (let i = 0; i < nProf; i++) {
     const d0 = i / nProf, d1 = (i + 1) / nProf;
-    const r = at(displayPosition((d0 + d1) / 2, 0, 0, b));
+    const r = at(positionAt((d0 + d1) / 2, 0, 0, b));
     profile.push({ d0, d1, q25: r.q25, q50: r.median, q75: r.q75, n: Number.isFinite(r.median) ? r.n : 0 });
   }
   return { field, fieldFlags, shellValues, shellFlags, profile, log: isLogScale(q, stat, g) };

@@ -14,7 +14,7 @@ from mango_explorer import boundaries as b
 from mango_explorer.atlas import frames as fr
 from mango_explorer.atlas.binning import hist_bins, spatial_cells
 from mango_explorer.atlas.grid import load_grid
-from mango_explorer.atlas.knn import display_positions, frame_phi_deg, knn_stats
+from mango_explorer.atlas.knn import frame_positions, knn_stats
 from mango_explorer.atlas.pipeline import build_atlas
 from mango_explorer.atlas.sources import iter_polars
 from mango_explorer.atlas.stats import hist_quantile
@@ -27,6 +27,12 @@ G = load_grid()
 
 def lst(a):
     return np.asarray(a, dtype=float).round(12).tolist()
+
+
+def reference():
+    theta = np.radians(np.arange(0, 151, 10))
+    r_mp, r_bs = G.reference_radii()
+    return {"theta_rad": lst(theta), "mp": lst(r_mp(theta)), "bs": lst(r_bs(theta))}
 
 
 def boundaries():
@@ -84,8 +90,8 @@ def knn_golden(root, manifest, sel):
     conds = cubes_selected(manifest, sel)
     off = t["cond_offsets"].astype(np.int64)
     rows = np.concatenate([np.arange(off[c], off[c + 1]) for c in conds])
-    phi = frame_phi_deg("PGSM_fold", t["phi_gsm"][rows], t["clock_deg"][rows], t["bx_neg"][rows])
-    pos = display_positions(t["d"][rows], t["theta"][rows], phi, G)
+    xyz = np.stack([t["x"][rows], t["y"][rows], t["z"][rows]], 1).astype(float)
+    pos = frame_positions("PGSM_fold", xyz, t["clock_deg"][rows], t["bx_neg"][rows])
     rng = np.random.default_rng(9)
     nodes = pos[rng.choice(len(pos), 12, replace=False)] + rng.normal(0, 0.5, (12, 3))
     nodes = np.concatenate([nodes, [[0.0, 40.0, 0.0]]])   # far outside: NaN
@@ -109,7 +115,7 @@ def atlas_mini():
     shutil.rmtree(out, ignore_errors=True)
     df = synthetic_magnetosheath(30_000, seed=5)
     build_atlas(iter_polars(df), G, out, frames=["PGSM_fold"], source={"kind": "synthetic"},
-                log=lambda *_: None)
+                sample_fraction=0.5, log=lambda *_: None)
     manifest, cubes, hours = read_atlas(out)
     sel = {"clock_deg": [11, 0, 1, 2], "cone_deg": [2, 3, 4]}
     q = cubes[0].query(sel)
@@ -130,7 +136,7 @@ def atlas_mini():
 
 if __name__ == "__main__":
     ROOT.mkdir(exist_ok=True)
-    core = {"grid": G.version, "boundaries": boundaries(), "frames": frames(),
+    core = {"grid": G.version, "boundaries": boundaries(), "reference": reference(), "frames": frames(),
             "binning": binning(), "atlas_mini": atlas_mini()}
     (ROOT / "core.json").write_text(json.dumps(core))
     print("wrote", ROOT / "core.json", "and", ROOT / "atlas-mini")

@@ -1,17 +1,11 @@
 import numpy as np
-import pytest
 
+from mango_explorer.atlas.frames import vector_to_frame
 from mango_explorer.atlas.grid import load_grid
-from mango_explorer.atlas.knn import (
-    SampleAccumulator,
-    display_positions,
-    display_radii,
-    frame_phi_deg,
-    knn_stats,
-)
+from mango_explorer.atlas.knn import SampleAccumulator, frame_positions, knn_stats, sample_keep
 from mango_explorer.atlas.pipeline import build_atlas
 from mango_explorer.atlas.prepare import prepare
-from mango_explorer.atlas.quantities import normalized_angles
+from mango_explorer.atlas.quantities import geometric_depth
 from mango_explorer.atlas.sources import columns_from_polars, iter_polars
 from mango_explorer.atlas.store import read_atlas, read_samples
 from mango_explorer.atlas.synthetic import synthetic_magnetosheath
@@ -58,40 +52,43 @@ def test_cap_rule_uses_the_median_neighbour_distance():
     assert np.isnan(knn_stats([[0, 0, 0]], pos, val, iv, k=24, cap=2.0, search_factor=3.0)["median"][0])
 
 
-def test_frame_rotation_of_azimuth_matches_frames_module():
+def test_frame_positions_match_the_frames_module():
     df = synthetic_magnetosheath(5_000, seed=2)
-    cols = columns_from_polars(df)
-    prep = prepare(cols, G)
+    prep = prepare(columns_from_polars(df), G)
+    imf = {k: np.asarray(columns_from_polars(df)[k])[np.isfinite(columns_from_polars(df)["Bx_imf"])]
+           for k in ("Bx_imf", "By_imf", "Bz_imf")}
     for frame in G.frames:
-        _, phi = normalized_angles({k: np.asarray(v)[np.isfinite(cols["Bx_imf"])] for k, v in cols.items()}, frame)
-        mine = frame_phi_deg(frame, prep.phi_gsm, prep.clock_deg, prep.bx_neg)
-        diff = (mine - phi + 180) % 360 - 180
-        assert np.nanmax(np.abs(diff)) < 1e-6
+        mine = frame_positions(frame, prep.xyz, prep.clock_deg, prep.bx_neg)
+        ref = np.stack(vector_to_frame(frame, *prep.xyz.T, magnetic=False,
+                                       bx_imf=imf["Bx_imf"], by_imf=imf["By_imf"], bz_imf=imf["Bz_imf"]), 1)
+        np.testing.assert_allclose(mine, ref, atol=1e-9)
 
 
-def test_display_positions_sit_between_the_displayed_boundaries():
-    r_mp, r_bs = display_radii(G)
-    p = display_positions([0.0, 1.0, 0.5], [0.0, 60.0, 90.0], [0.0, 90.0, 200.0], G)
-    r = np.linalg.norm(p, axis=1)
-    assert r[0] == pytest.approx(r_mp(0.0))
-    assert r[1] == pytest.approx(r_bs(np.radians(60)))
-    assert r[2] == pytest.approx((r_mp(np.pi / 2) + r_bs(np.pi / 2)) / 2)
+def test_geometric_depth_of_synthetic_positions_is_the_generated_depth():
+    df = synthetic_magnetosheath(5_000, seed=3)
+    cols = columns_from_polars(df)
+    np.testing.assert_allclose(geometric_depth(cols, G), cols["R_norm"], atol=1e-9)
 
 
-def test_sample_table_decimation_and_round_trip(tmp_path):
+def test_sample_fraction_is_random_but_deterministic(tmp_path):
+    t = np.arange(200_000, dtype=np.int64) * 5_000_000_000
+    iv = np.zeros_like(t)
+    keep = sample_keep(iv, t, 0.1)
+    assert 0.09 < keep.mean() < 0.11
+    np.testing.assert_array_equal(keep, sample_keep(iv, t, 0.1))
+    # not periodic in time: kept samples are not evenly spaced
+    assert np.std(np.diff(np.flatnonzero(keep))) > 3
+
     df = synthetic_magnetosheath(20_000, seed=4)
-    acc_all, acc_min = SampleAccumulator(G, "clock-cone-Ma", 0), SampleAccumulator(G, "clock-cone-Ma", 60)
+    acc = SampleAccumulator(G, "clock-cone-Ma", 0.25)
     for cols in iter_polars(df, 7_000):
-        p = prepare(cols, G)
-        acc_all.add(p)
-        acc_min.add(p)
-    t_all, t_min = acc_all.finalize(), acc_min.finalize()
-    assert len(t_min["d"]) * 10 < len(t_all["d"]) < len(t_min["d"]) * 14   # ~12 samples per minute
-    assert np.all(np.diff(t_all["cond_offsets"].astype(np.int64)) >= 0)
-    assert t_all["cond_offsets"][-1] == len(t_all["d"])
+        acc.add(prepare(cols, G))
+    table = acc.finalize()
+    assert np.all(np.diff(table["cond_offsets"].astype(np.int64)) >= 0)
+    assert table["cond_offsets"][-1] == len(table["x"])
 
-    build_atlas(iter_polars(df), G, tmp_path, sample_window_s=60, log=lambda *_: None)
+    build_atlas(iter_polars(df), G, tmp_path, sample_fraction=0.25, log=lambda *_: None)
     manifest, _, _ = read_atlas(tmp_path)
     back = read_samples(tmp_path, manifest["samples"])
-    for k in ("d", "theta", "interval", "q:Np_ratio"):
-        np.testing.assert_array_equal(back[k], t_min[k])
+    for k in ("x", "z", "interval", "q:Np_ratio"):
+        np.testing.assert_array_equal(back[k], table[k])

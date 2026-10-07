@@ -17,6 +17,9 @@ describe('cell statistics', () => {
     const r = fakeResult();
     const f = cellFlags(r.n, r.neffUpper);
     expect([f[0], f[1], f[2]]).toEqual([FLAG.OK, FLAG.WEAK, FLAG.EMPTY]);
+    r.n[1] = 5000;  // plenty of samples but a single spacecraft-hour
+    expect(cellFlags(r.n, r.neffUpper)[1]).toBe(FLAG.OK);
+    expect(cellFlags(r.n, r.neffUpper, undefined, true)[1]).toBe(FLAG.WEAK);
   });
   it('median of a single-bin histogram is the bin centre, in log10 space', () => {
     const v = cellValues(fakeResult(), 'Np', 'median');

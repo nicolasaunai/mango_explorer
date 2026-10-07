@@ -93,3 +93,20 @@ def tessellate_surface(
             tris.append((a, d, b))
     idx = np.asarray(tris, dtype=np.uint32)
     return pos, idx
+
+
+def paraboloid_r(theta, nose: float, p: float):
+    """Axisymmetric paraboloid x = nose - rho^2 / (4 p) about +X, as a radius r(theta).
+
+    MANGO normalizes magnetosheath positions between two such fixed reference surfaces.
+    r solves sin^2(t) r^2 + 4 p cos(t) r - 4 p nose = 0; the two algebraically equal forms of the
+    positive root are used where each is free of cancellation (dayside / nightside).
+    """
+    theta = np.asarray(theta, dtype=float)
+    a = np.sin(theta) ** 2
+    b = 4.0 * p * np.cos(theta)
+    disc = np.sqrt(b * b + 16.0 * p * nose * a)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        dayside = 8.0 * p * nose / (b + disc)
+        nightside = (disc - b) / (2.0 * a)
+    return np.where(b >= 0, dayside, nightside)

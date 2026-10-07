@@ -107,10 +107,10 @@ def read_cube(root: Path, entry: dict, grid: Grid) -> CubeData:
     )
 
 
-def write_samples(root: Path, table: dict[str, np.ndarray], cube_id: str, window_s: float) -> dict:
+def write_samples(root: Path, table: dict[str, np.ndarray], cube_id: str, fraction: float) -> dict:
     """The k-NN sample table: base geometry in one file, one float32 file per quantity."""
     base = {k: v for k, v in table.items() if not k.startswith("q:")}
-    entry = {"cube": cube_id, "window_s": window_s, "n": len(table["d"]),
+    entry = {"cube": cube_id, "fraction": fraction, "n": len(table["x"]),
              "base": {"path": "samples/base.bin", "sections": _write_sections(root / "samples/base.bin", list(base.items()))},
              "quantities": {}}
     for k, v in table.items():
@@ -143,7 +143,7 @@ def write_atlas(root: Path, grid: Grid, cubes: list[CubeData], hours: dict[str, 
         "js_types": _JS_TYPES,
     }
     if samples is not None:
-        manifest["samples"] = write_samples(root, samples["table"], samples["cube"], samples["window_s"])
+        manifest["samples"] = write_samples(root, samples["table"], samples["cube"], samples["fraction"])
     (root / "manifest.json").write_text(json.dumps(manifest, indent=1))
     return manifest
 

@@ -1,8 +1,7 @@
 """k-nearest-neighbour statistics: the reference the web explorer's k-NN mode must match.
 
-Samples are placed in the *displayed* magnetosheath of a frame: a sample at (D_msh, theta, phi)
-sits at r = R_mp(theta) + D (R_bs(theta) - R_mp(theta)) between the boundaries the explorer
-draws (grid spec "display_boundaries"). Distances are Euclidean in R_E in that space.
+Samples sit at their MANGO normalized positions (X/Y/Z_gsm_norm), rotated into the chosen frame
+about X. Distances are Euclidean in R_E in that space; time plays no role.
 
 A node gets the statistics of its k nearest samples, or NaN when the distance of the
 ceil(k/2)-th nearest exceeds the cap ("the median neighbour distance exceeds the cap").
@@ -13,38 +12,31 @@ from __future__ import annotations
 import numpy as np
 
 from mango_explorer.atlas.binning import flat_condition_index
+from mango_explorer.atlas.frames import rotate_about_x
 from mango_explorer.atlas.grid import Grid
 from mango_explorer.atlas.prepare import Prepared
-from mango_explorer.boundaries import jelinek_bs, shue_alpha, shue_mp, shue_r0
 
 
-def display_radii(grid: Grid):
-    """(R_mp(theta), R_bs(theta)) of the boundaries the explorer draws; theta in radians."""
-    b = grid.raw["display_boundaries"]
-    pd, bz = b["pd_nPa"], b["bz_nT"]
-    r0, alpha = shue_r0(bz, pd), shue_alpha(bz, pd)
-    return (lambda t: shue_mp(t, r0, alpha)), (lambda t: jelinek_bs(t, pd))
-
-
-def frame_phi_deg(frame: str, phi_gsm, clock_deg, bx_neg):
-    """Azimuth of a sample in `frame` from its GSM azimuth and its IMF clock angle / Bx sign."""
-    phi = np.asarray(phi_gsm, dtype=float)
+def frame_positions(frame: str, xyz, clock_deg, bx_neg) -> np.ndarray:
+    """Normalized GSM positions (n, 3) expressed in `frame` (see atlas.frames)."""
+    xyz = np.asarray(xyz, dtype=float)
     if frame == "GSM":
-        return phi % 360.0
-    shift = np.asarray(clock_deg, dtype=float)
+        return xyz.copy()
+    angle = np.radians(np.asarray(clock_deg, dtype=float))
     if frame == "PGSM_fold":
-        shift = shift + 180.0 * np.asarray(bx_neg, dtype=bool)
-    return (phi + shift) % 360.0
+        angle = angle + np.pi * np.asarray(bx_neg, dtype=bool)
+    y, z = rotate_about_x(xyz[:, 1], xyz[:, 2], angle)
+    return np.stack([xyz[:, 0], y, z], axis=1)
 
 
-def display_positions(d, theta_deg, phi_deg, grid: Grid) -> np.ndarray:
-    """(n, 3) positions (X, Y, Z) in R_E between the displayed boundaries."""
-    r_mp, r_bs = display_radii(grid)
-    t = np.radians(np.asarray(theta_deg, dtype=float))
-    p = np.radians(np.asarray(phi_deg, dtype=float))
-    rm = r_mp(t)
-    r = rm + np.asarray(d, dtype=float) * (r_bs(t) - rm)
-    return np.stack([r * np.cos(t), r * np.sin(t) * np.cos(p), r * np.sin(t) * np.sin(p)], axis=1)
+def sample_keep(interval, t_ns, fraction: float) -> np.ndarray:
+    """Deterministic pseudo-random selection of a fraction of samples (independent of chunking)."""
+    if fraction >= 1:
+        return np.ones(len(t_ns), dtype=bool)
+    h = (np.asarray(t_ns, dtype=np.uint64) // np.uint64(1_000_000_000)) * np.uint64(2654435761)
+    h ^= (np.asarray(interval, dtype=np.uint64) >> np.uint64(40)) * np.uint64(40503)
+    h = (h * np.uint64(0x9E3779B97F4A7C15)) >> np.uint64(40)
+    return (h.astype(np.float64) / float(1 << 24)) < fraction
 
 
 def knn_stats(nodes, positions, values, intervals, k: int, cap: float, search_factor: float = 2.0):
@@ -84,46 +76,35 @@ def knn_stats(nodes, positions, values, intervals, k: int, cap: float, search_fa
 
 
 class SampleAccumulator:
-    """Collects the per-sample table (decimated in time) that the web k-NN mode searches."""
+    """Collects the per-sample table (a deterministic random fraction) that the web k-NN mode searches."""
 
-    def __init__(self, grid: Grid, cube_id: str, window_s: float | None = None):
+    def __init__(self, grid: Grid, cube_id: str, fraction: float | None = None):
         self.grid, self.cube_id = grid, cube_id
-        self.window_ns = int(1e9 * (grid.raw["knn"]["sample_window_s"] if window_s is None else window_s))
+        self.fraction = grid.raw["knn"]["sample_fraction"] if fraction is None else fraction
         self.dims, self.shape = grid.cube_dims(cube_id), grid.cube_shape(cube_id)
         self._parts: list[dict[str, np.ndarray]] = []
 
     def add(self, prep: Prepared) -> None:
         cond = flat_condition_index(prep.cond_bins, self.dims, self.shape)
         keep = (cond >= 0) & (next(iter(prep.cells.values())) >= 0)
-        sc = prep.interval >> 40
-        win = prep.t_ns // self.window_ns if self.window_ns > 0 else np.arange(len(prep.t_ns))
+        keep &= sample_keep(prep.interval, prep.t_ns, self.fraction)
         part = {
-            "cond": cond, "sc": sc, "win": win, "d": prep.d, "theta": prep.theta,
-            "phi_gsm": prep.phi_gsm, "clock_deg": prep.clock_deg, "bx_neg": prep.bx_neg,
-            "interval": prep.interval, **{f"q:{q}": v for q, v in prep.values.items()},
+            "cond": cond, "x": prep.xyz[:, 0], "y": prep.xyz[:, 1], "z": prep.xyz[:, 2],
+            "clock_deg": prep.clock_deg, "bx_neg": prep.bx_neg, "interval": prep.interval,
+            **{f"q:{q}": v for q, v in prep.values.items()},
         }
         self._parts.append({k: np.asarray(v)[keep] for k, v in part.items()})
 
     def finalize(self) -> dict[str, np.ndarray]:
         cols = {k: np.concatenate([p[k] for p in self._parts]) for k in self._parts[0]}
-        # first sample of each (spacecraft, window), then grouped by condition bin
-        order = np.lexsort((cols["win"], cols["sc"]))
-        cols = {k: v[order] for k, v in cols.items()}
-        if self.window_ns > 0:
-            key = np.stack([cols["sc"], cols["win"]], axis=1)
-            _, first = np.unique(key, axis=0, return_index=True)
-            cols = {k: v[np.sort(first)] for k, v in cols.items()}
         order = np.argsort(cols["cond"], kind="stable")
         cols = {k: v[order] for k, v in cols.items()}
         n_cond = int(np.prod(self.shape))
-        offsets = np.searchsorted(cols["cond"], np.arange(n_cond + 1)).astype(np.uint32)
         sc = (cols["interval"] >> 40).astype(np.int64)
         hour = cols["interval"] & ((1 << 40) - 1)
         table = {
-            "cond_offsets": offsets,
-            "d": cols["d"].astype(np.float32),
-            "theta": cols["theta"].astype(np.float32),
-            "phi_gsm": cols["phi_gsm"].astype(np.float32),
+            "cond_offsets": np.searchsorted(cols["cond"], np.arange(n_cond + 1)).astype(np.uint32),
+            "x": cols["x"].astype(np.float32), "y": cols["y"].astype(np.float32), "z": cols["z"].astype(np.float32),
             "clock_deg": cols["clock_deg"].astype(np.float32),
             "interval": ((sc << 24) | hour).astype(np.uint32),
             "bx_neg": cols["bx_neg"].astype(np.uint8),
@@ -131,6 +112,7 @@ class SampleAccumulator:
         for k, v in cols.items():
             if k.startswith("q:"):
                 q = k[2:]
-                axis = np.log10(np.where(v > 0, v, np.nan)) if self.grid.is_log(q) else v
+                with np.errstate(invalid="ignore", divide="ignore"):
+                    axis = np.log10(np.where(v > 0, v, np.nan)) if self.grid.is_log(q) else v
                 table[k] = axis.astype(np.float32)
         return table

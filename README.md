@@ -11,7 +11,7 @@ It has two parts:
 - **`web/`**: a Svelte 5 + TypeScript + three.js app that reads the atlas. It runs no Python in
   the browser.
 
-Both sides follow one binning contract, `src/mango_explorer/spec/grid-v1.json`. Python writes
+Both sides follow one binning contract, `src/mango_explorer/spec/grid-v2.json`. Python writes
 reference values to `golden/`, and the TypeScript tests check against them.
 
 ## Python: build an atlas
@@ -20,7 +20,9 @@ reference values to `golden/`, and the TypeScript tests check against them.
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev]" polars pyarrow hypothesis
 .venv/bin/pytest -q
 
-# from the MANGO server's on-disk data (on the LPP machine)
+# from the MANGO server (space-mango >= 0.2, cached and resumable; about 8 min for everything)
+.venv/bin/python -m mango_explorer.atlas build --mango-api --out atlas/
+# from the server's on-disk parquet
 .venv/bin/python -m mango_explorer.atlas build --parquet-dir $MANGO_DATA_DIR/magnetosheath --out atlas/
 # from Arrow files downloaded with the MANGO API (format=arrow)
 .venv/bin/python -m mango_explorer.atlas build --arrow msh_*.arrow --out atlas/
@@ -48,13 +50,20 @@ The view state lives in the URL hash, so a link reproduces the view.
   - **PGSM** rotates each sample by its own IMF clock angle, so that the IMF points to +Z.
   - **PGSM_fold** also flips samples with Bx_imf < 0 (B → −B, then 180° about X), so the
     quasi-parallel side is always +Z.
-- **Statistics live in boundary-normalized space.** The coordinates are D_msh (= MANGO
-  `R_norm`), θ and φ.
-- **N_eff** counts distinct (spacecraft, hour) intervals.
+- **What is shown is MANGO's normalized data.**
+  - Each sample sits at its served `X/Y/Z_gsm_norm` position, rotated into the chosen frame.
+  - Depth D_msh is measured geometrically between MANGO's reference surfaces. These are
+    paraboloids fitted to the data (`scripts/fit_reference_boundaries.py`, grid-v2) and are
+    the boundaries the app draws.
+  - This geometric depth differs from the served `R_norm` by less than 0.09 for 95 % of samples.
 - **Statistics come from bins or from k-NN.**
-  - **Bins:** histograms per cell are summed over the selected condition bins.
-  - **k-NN:** the k nearest samples of each displayed node, measured in the drawn sheath of the frame. A node is NaN when the median neighbour distance exceeds the cap (default 2 R_E).
-  - The k-NN sample table keeps one sample per spacecraft per `--sample-window` seconds (0 keeps them all). The Python reference is `mango_explorer.atlas.knn`.
+  - **Bins:** histograms per (D, θ, φ) cell are summed over the selected condition bins.
+  - **k-NN:** the k nearest normalized positions of each displayed node. A node is NaN when the
+    median neighbour distance exceeds the cap (default 2 R_E).
+  - The k-NN sample table keeps a deterministic random fraction of the samples
+    (`--sample-fraction`, default 0.1). Time plays no role.
+- **N_eff** (distinct spacecraft-hours) is an optional overlay that hatches cells dominated by
+  few spacecraft passes.
 
 The legacy Pyodide prototype (`explorer.py`, `data/`, `colormap.py`, `gridding.py`) is kept in
 `src/` with its tests. Its web front end now lives in `old/pyodide-web/`.

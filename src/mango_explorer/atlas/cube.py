@@ -95,7 +95,23 @@ class CubeAccumulator:
         self._by_sc = ([], [])
         self._pairs: list[np.ndarray] = []
 
+    _COMPACT_EVERY = 8
+
+    def _compact(self) -> None:
+        """Merge accumulated per-chunk parts so memory stays bounded on long builds."""
+        for q, parts in self._hist.items():
+            k, c = _merge(*parts)
+            self._hist[q] = ([k], [c])
+        k, c = _merge(*self._samples)
+        self._samples = ([k], [c])
+        k, c = _merge(*self._by_sc)
+        self._by_sc = ([k], [c])
+        pairs = np.concatenate(self._pairs)
+        self._pairs = [np.unique(pairs, axis=0) if len(pairs) else pairs]
+
     def add(self, prep: Prepared) -> None:
+        if len(self._pairs) >= self._COMPACT_EVERY:
+            self._compact()
         nc, nb = self.grid.n_cells, self.grid.n_hist
         cond = flat_condition_index(prep.cond_bins, self.dims, self.shape)
         cell = prep.cells[self.frame]

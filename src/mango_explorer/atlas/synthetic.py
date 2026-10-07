@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from mango_explorer.boundaries import shue_mp
-
 _SAMPLES_PER_PASS = 720  # one hour at 5 s
 
 
@@ -48,8 +46,10 @@ def synthetic_magnetosheath(n_rows: int = 100_000, seed: int = 0,
     d = np.clip(per(rng.uniform(-0.05, 1.05, n_pass)) + s * per(rng.normal(0, 0.3, n_pass)),
                 -0.12, 1.12)
     theta = np.abs(theta)
-    r_mp = shue_mp(theta, 10.4, 0.58)
-    r_bs = shue_mp(theta, 13.6, 0.75)
+    from mango_explorer.atlas.grid import load_grid
+
+    ref_mp, ref_bs = load_grid().reference_radii()
+    r_mp, r_bs = ref_mp(theta), ref_bs(theta)
     r = r_mp + d * (r_bs - r_mp)
     x, y, z = r * np.cos(theta), r * np.sin(theta) * np.cos(phi), r * np.sin(theta) * np.sin(phi)
 

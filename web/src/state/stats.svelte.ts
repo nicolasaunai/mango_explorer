@@ -40,11 +40,11 @@ export async function startWorker(base: string) {
 }
 
 /** Statistics for the current conditions (slot B) or the pinned comparison set (slot A). */
-export async function runQuery(frame: FrameName, quantity: QuantityName, stat: Stat, selection: Selection, slot: Slot = 'B') {
+export async function runQuery(frame: FrameName, quantity: QuantityName, stat: Stat, selection: Selection, useNeff: boolean, slot: Slot = 'B') {
   if (!worker) return;
   const id = (latestQuery[slot] = nextId);
   if (slot === 'B') stats.pending = true;
-  const r = await send({ type: 'query', slot, frame, quantity, stat, selection: $state.snapshot(selection), profileThetaMax: PROFILE_THETA_MAX });
+  const r = await send({ type: 'query', slot, frame, quantity, stat, selection: $state.snapshot(selection), profileThetaMax: PROFILE_THETA_MAX, useNeff });
   if (id !== latestQuery[slot]) return; // superseded by a newer request
   if (slot === 'B') stats.pending = false;
   if (r.type === 'query') {
@@ -59,14 +59,14 @@ let knnTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** k-NN statistics; debounced because each request searches every displayed node. */
 export function runKnn(frame: FrameName, quantity: QuantityName, stat: Stat, selection: Selection,
-  plane: Plane, shell: number, k: number, cap: number) {
+  plane: Plane, shell: number, k: number, cap: number, useNeff: boolean) {
   if (!worker) return;
   const snap = $state.snapshot(selection);
   stats.pending = true;
   clearTimeout(knnTimer);
   knnTimer = setTimeout(async () => {
     const id = (latestKnn = nextId);
-    const r = await send({ type: 'knn', frame, quantity, stat, selection: snap, plane, shell, k, cap });
+    const r = await send({ type: 'knn', frame, quantity, stat, selection: snap, plane, shell, k, cap, useNeff });
     if (id !== latestKnn) return;
     stats.pending = false;
     if (r.type === 'knn') { stats.knn = r; stats.error = ''; }

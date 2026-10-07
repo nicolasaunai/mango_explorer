@@ -1,9 +1,8 @@
 {
-  "version": "grid-v1",
-  "description": "Binning contract shared by the Python atlas pipeline and the web explorer. Change it only by creating grid-v2.",
+  "version": "grid-v2",
+  "description": "Binning contract shared by the Python atlas pipeline and the web explorer. Change binning only by creating a new version.",
   "spatial": {
     "D_msh": {
-      "column": "R_norm",
       "edges": [
         0.0,
         0.1,
@@ -21,7 +20,7 @@
         -0.1,
         1.1
       ],
-      "definition": "fractional depth (|r| - R_mp)/(R_bs - R_mp); values inside clip but outside edges go to the first/last bin, values outside clip are dropped"
+      "definition": "geometric depth (|r_norm| - R_mp,ref(theta)) / (R_bs,ref(theta) - R_mp,ref(theta)) of the normalized position between the reference boundaries; values inside the clip band but outside the edges go to the first/last bin, others are dropped. It differs from the served R_norm by |dD| < 0.09 for 95 % of samples."
     },
     "theta_deg": {
       "edges_range": [
@@ -209,13 +208,14 @@
   },
   "neff": {
     "interval_s": 3600,
-    "definition": "number of distinct (spacecraft, hour) intervals"
+    "definition": "number of distinct (spacecraft, hour) intervals; an optional overlay that hatches cells dominated by few spacecraft passes",
+    "overlay_default": false
   },
   "reliability": {
-    "min_neff": 10,
-    "min_n": 360
+    "min_n": 360,
+    "min_neff": 10
   },
-  "row_filter": "SW_pairing and Norma_pos are true, and all columns used are finite",
+  "row_filter": "SW_pairing and Norma_pos are true, and the IMF and normalized position are finite",
   "spacecraft": [
     "THA",
     "THB",
@@ -227,19 +227,24 @@
     "MMS",
     "DS1"
   ],
-  "display_boundaries": {
-    "magnetopause": "shue98",
-    "bow_shock": "jelinek12",
-    "pd_nPa": 2.0,
-    "bz_nT": 0.0,
-    "note": "Shapes the explorer draws, and between which k-NN samples are placed by their (D_msh, theta, phi). Illustrative until the MANGO boundary models are available."
-  },
   "knn": {
     "k": 50,
     "cap_re": 2.0,
     "search_factor": 2.0,
     "min_neff": 5,
-    "sample_window_s": 60,
-    "definition": "k nearest samples (Euclidean, R_E, in the displayed sheath of the chosen frame); NaN when the distance of the ceil(k/2)-th nearest exceeds cap_re. Only neighbours within search_factor*cap_re are searched. Quantiles use linear interpolation of the neighbours' values in axis space. The sample table keeps the first sample of each (spacecraft, sample_window_s) window; 0 keeps all."
+    "sample_fraction": 0.1,
+    "definition": "k nearest samples (Euclidean, R_E) among the normalized positions rotated into the chosen frame; NaN when the distance of the ceil(k/2)-th nearest exceeds cap_re. Only neighbours within search_factor*cap_re are searched. Quantiles use linear interpolation of the neighbours' values in axis space. The sample table keeps a deterministic random fraction (sample_fraction) of the samples; time plays no role."
+  },
+  "reference_boundaries": {
+    "kind": "paraboloid",
+    "magnetopause": {
+      "nose": 10.5917,
+      "p": 5.6349
+    },
+    "bow_shock": {
+      "nose": 13.4757,
+      "p": 9.7098
+    },
+    "definition": "x = nose - rho^2/(4 p) about +X (R_E). MANGO normalizes magnetosheath positions (X/Y/Z_gsm_norm) radially between two fixed reference surfaces; these paraboloids are fitted to the served positions (scripts/fit_reference_boundaries.py, dataset 2026.0: median |residual| 0.12 R_E). The exact surfaces are not published with the data."
   }
 }

@@ -1,13 +1,13 @@
-// The boundaries the explorer draws (grid spec "display_boundaries"); k-NN samples sit between them.
+// MANGO's normalization reference surfaces (grid spec "reference_boundaries"): the explorer draws
+// them, and the normalized positions of the data lie between them.
 import { grid } from './grid';
-import { jelinekBs, shueAlpha, shueMp, shueR0 } from './boundaries';
+import { paraboloidR } from './boundaries';
 import type { Boundaries } from './geometry';
 
-const db = grid.raw.display_boundaries;
-const r0 = shueR0(db.bz_nT, db.pd_nPa), alpha = shueAlpha(db.bz_nT, db.pd_nPa);
+const ref = grid.raw.reference_boundaries;
 
 export const DISPLAY_BOUNDARIES: Boundaries = {
-  rMp: (t) => shueMp(t, r0, alpha),
-  rBs: (t) => jelinekBs(t, db.pd_nPa),
+  rMp: (t) => paraboloidR(t, ref.magnetopause.nose, ref.magnetopause.p),
+  rBs: (t) => paraboloidR(t, ref.bow_shock.nose, ref.bow_shock.p),
 };
-export const DISPLAY_NOTE = `Shue 98 / Jelínek 12 at Pd = ${db.pd_nPa} nPa · illustrative`;
+export const DISPLAY_NOTE = 'MANGO normalization reference · paraboloids fitted to the data';

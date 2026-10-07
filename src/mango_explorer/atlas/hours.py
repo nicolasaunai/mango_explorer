@@ -29,6 +29,10 @@ class HourAccumulator:
         return packed
 
     def add(self, prep: Prepared) -> None:
+        if len(self._keys) >= 8:  # keep memory bounded on long builds
+            rows, inv = np.unique(np.concatenate(self._keys), axis=0, return_inverse=True)
+            counts = np.bincount(inv.ravel(), weights=np.concatenate(self._counts)).astype(np.int64)
+            self._keys, self._counts = [rows], [counts]
         ok = next(iter(prep.cells.values())) >= 0
         rows = np.stack([prep.interval[ok], self._pack(prep, ok)], axis=1)
         if not len(rows):

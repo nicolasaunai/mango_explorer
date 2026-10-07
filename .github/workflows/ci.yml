@@ -13,7 +13,7 @@ jobs:
         with: { python-version: '3.12' }
       - run: pip install -e ".[dev]"
       - run: pytest -q
-      - run: ruff check src/mango_explorer/atlas tests/atlas scripts/make_goldens.py
+      - run: ruff check src/mango_explorer/atlas src/mango_explorer/boundaries.py tests/atlas scripts
       # golden files must be what the current Python code produces
       - run: python scripts/make_goldens.py && git diff --exit-code -- golden/core.json
 

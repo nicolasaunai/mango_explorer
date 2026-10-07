@@ -40,7 +40,7 @@ self.onmessage = async (e: MessageEvent<StatsRequest>) => {
       const res = await (await cube(m.frame)).query(m.quantity, m.selection);
       if (m.slot === 'B') last = { quantity: m.quantity, res, frame: m.frame, selection: m.selection };
       const values = cellValues(res, m.quantity, m.stat);
-      const flags = cellFlags(res.n, res.neffUpper);
+      const flags = cellFlags(res.n, res.neffUpper, undefined, m.useNeff);
       const n = res.n.slice(), neffUpper = res.neffUpper.slice(), spread = cellSpread(res, m.quantity);
       post({
         type: 'query', id: m.id, slot: m.slot, frame: m.frame, quantity: m.quantity, stat: m.stat,
@@ -54,10 +54,10 @@ self.onmessage = async (e: MessageEvent<StatsRequest>) => {
       const key = JSON.stringify([m.frame, m.quantity, m.selection, m.cap]);
       if (knnCache?.key !== key) {
         const values = await table.quantity(m.quantity);
-        knnCache = { key, s: buildSamples(table, values, m.frame, m.selection, DISPLAY_BOUNDARIES, m.cap), k: m.k, cap: m.cap };
+        knnCache = { key, s: buildSamples(table, values, m.frame, m.selection, m.cap), k: m.k, cap: m.cap };
       }
       knnCache.k = m.k;
-      const opts = { k: m.k, cap: m.cap, factor: KNN.search_factor, minNeff: KNN.min_neff };
+      const opts = { k: m.k, cap: m.cap, factor: KNN.search_factor, minNeff: KNN.min_neff, useNeff: m.useNeff };
       const f = knnField(knnCache.s, m.quantity, m.stat, m.plane, m.shell, DISPLAY_BOUNDARIES, opts);
       const all = new Float32Array([...f.field, ...f.shellValues]), flags = new Uint8Array([...f.fieldFlags, ...f.shellFlags]);
       post({

@@ -96,12 +96,20 @@ class Grid:
     def is_log(self, quantity: str) -> bool:
         return self.raw["quantities"][quantity]["scale"] == "log"
 
+    def reference_radii(self):
+        """(R_mp,ref(theta), R_bs,ref(theta)): the surfaces MANGO normalizes between; theta in radians."""
+        from mango_explorer.boundaries import paraboloid_r
+
+        ref = self.raw["reference_boundaries"]
+        mp, bs = ref["magnetopause"], ref["bow_shock"]
+        return (lambda t: paraboloid_r(t, mp["nose"], mp["p"])), (lambda t: paraboloid_r(t, bs["nose"], bs["p"]))
+
     @property
     def neff_interval_s(self) -> int:
         return int(self.raw["neff"]["interval_s"])
 
 
 @cache
-def load_grid(version: str = "grid-v1") -> Grid:
+def load_grid(version: str = "grid-v2") -> Grid:
     text = resources.files("mango_explorer").joinpath("spec", f"{version}.json").read_text()
     return Grid(json.loads(text))

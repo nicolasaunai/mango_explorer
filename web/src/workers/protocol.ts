@@ -6,10 +6,10 @@ import type { KnnResult } from '../core/knn';
 
 export type StatsRequest =
   | { type: 'init'; id: number; base: string }
-  | { type: 'query'; id: number; slot: Slot; frame: FrameName; quantity: QuantityName; stat: Stat; selection: Selection; profileThetaMax: number }
+  | { type: 'query'; id: number; slot: Slot; frame: FrameName; quantity: QuantityName; stat: Stat; selection: Selection; profileThetaMax: number; useNeff: boolean }
   | { type: 'probe'; id: number; cell: number }
   | { type: 'knn'; id: number; frame: FrameName; quantity: QuantityName; stat: Stat; selection: Selection;
-      plane: Plane; shell: number; k: number; cap: number }
+      plane: Plane; shell: number; k: number; cap: number; useNeff: boolean }
   | { type: 'knnProbe'; id: number; point: [number, number, number]; cell: number };
 
 export type Slot = 'A' | 'B';

@@ -1,20 +1,20 @@
-// k-nearest-neighbour statistics; Python reference: src/mango_explorer/atlas/knn.py.
+// k-nearest-neighbour statistics on MANGO's normalized positions; Python reference: src/mango_explorer/atlas/knn.py.
 // A node gets the quartiles of its k nearest samples, or NaN when the distance of the
 // ceil(k/2)-th nearest exceeds the cap. Only neighbours within factor * cap are searched.
 import type { FrameName } from './grid';
 import type { Boundaries } from './geometry';
-import { mod } from './frames';
 
 const RAD = Math.PI / 180;
 
-/** Azimuth of each sample in `frame` from its GSM azimuth, IMF clock angle and Bx sign. */
-export function framePhi(frame: FrameName, phiGsm: number, clockDeg: number, bxNeg: boolean): number {
-  if (frame === 'GSM') return mod(phiGsm, 360);
-  return mod(phiGsm + clockDeg + (frame === 'PGSM_fold' && bxNeg ? 180 : 0), 360);
+/** A normalized GSM position expressed in `frame`, from the sample's IMF clock angle and Bx sign. */
+export function framePosition(frame: FrameName, x: number, y: number, z: number, clockDeg: number, bxNeg: boolean): [number, number, number] {
+  if (frame === 'GSM') return [x, y, z];
+  const a = (clockDeg + (frame === 'PGSM_fold' && bxNeg ? 180 : 0)) * RAD, c = Math.cos(a), s = Math.sin(a);
+  return [x, y * c - z * s, y * s + z * c];
 }
 
-/** Position (X, Y, Z) in R_E of a sample at (D, theta, phi) between the displayed boundaries. */
-export function displayPosition(d: number, thetaDeg: number, phiDeg: number, b: Boundaries): [number, number, number] {
+/** Position (X, Y, Z) in R_E at depth D and angles (theta, phi) between the given boundaries. */
+export function positionAt(d: number, thetaDeg: number, phiDeg: number, b: Boundaries): [number, number, number] {
   const t = thetaDeg * RAD, p = phiDeg * RAD, rm = b.rMp(t);
   const r = rm + d * (b.rBs(t) - rm);
   return [r * Math.cos(t), r * Math.sin(t) * Math.cos(p), r * Math.sin(t) * Math.sin(p)];

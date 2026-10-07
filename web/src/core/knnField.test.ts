@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FIELD_HALF, FIELD_N, knnField, planePoint } from './knnField';
-import { SpatialHash, displayPosition } from './knn';
+import { SpatialHash, positionAt } from './knn';
 import { DISPLAY_BOUNDARIES as b } from './display';
 import { FLAG } from './compute';
 import { normalizedCoords } from './geometry';
@@ -10,11 +10,11 @@ describe('k-NN field', () => {
   const pts: number[] = [];
   for (let d = 0.05; d < 1; d += 0.1)
     for (let th = 0; th < 60; th += 3)
-      for (let ph = 0; ph < 360; ph += 10) pts.push(...displayPosition(d, th, ph, b));
+      for (let ph = 0; ph < 360; ph += 10) pts.push(...positionAt(d, th, ph, b));
   const n = pts.length / 3;
   const s = { hash: new SpatialHash(Float64Array.from(pts), 2), values: new Float64Array(n).fill(Math.log10(2)),
     intervals: Float64Array.from({ length: n }, (_, i) => i % 50), n };
-  const out = knnField(s, 'Np_ratio', 'median', 'XZ', 5, b, { k: 20, cap: 2, factor: 2, minNeff: 5 });
+  const out = knnField(s, 'Np_ratio', 'median', 'XZ', 5, b, { k: 20, cap: 2, factor: 2, minNeff: 5, useNeff: true });
 
   it('fills the dayside sheath and leaves the unsampled flanks NaN', () => {
     const at = (x: number, z: number) => {

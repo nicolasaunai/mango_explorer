@@ -1,5 +1,5 @@
-// The binning contract shared with the Python pipeline (src/mango_explorer/spec/grid-v1.json).
-import spec from '$spec/grid-v1.json';
+// The binning contract shared with the Python pipeline (src/mango_explorer/spec/grid-v2.json).
+import spec from '$spec/grid-v2.json';
 
 type EdgeSpec = { edges?: number[]; edges_range?: number[] };
 export type QuantityName = keyof typeof spec.quantities;

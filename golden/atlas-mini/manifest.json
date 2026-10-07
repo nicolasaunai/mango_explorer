@@ -1,7 +1,7 @@
 {
  "format": "mango-atlas/1",
- "grid": "grid-v1",
- "created": "2026-10-07T07:59:55+00:00",
+ "grid": "grid-v2",
+ "created": "2026-10-07T15:39:38+00:00",
  "source": {
   "kind": "synthetic"
  },
@@ -11,7 +11,7 @@
   "dropped_row_filter": 88,
   "dropped_outside_shell_or_theta": 2824
  },
- "build_seconds": 0.06,
+ "build_seconds": 0.07,
  "hours": {
   "path": "hours.bin",
   "n_rows": 41,
@@ -412,8 +412,8 @@
  },
  "samples": {
   "cube": "clock-cone-Ma",
-  "window_s": 60,
-  "n": 2228,
+  "fraction": 0.5,
+  "n": 13297,
   "base": {
    "path": "samples/base.bin",
    "sections": [
@@ -424,40 +424,40 @@
      "offset": 0
     },
     {
-     "name": "d",
+     "name": "x",
      "dtype": "float32",
-     "length": 2228,
+     "length": 13297,
      "offset": 1444
     },
     {
-     "name": "theta",
+     "name": "y",
      "dtype": "float32",
-     "length": 2228,
-     "offset": 10356
+     "length": 13297,
+     "offset": 54632
     },
     {
-     "name": "phi_gsm",
+     "name": "z",
      "dtype": "float32",
-     "length": 2228,
-     "offset": 19268
+     "length": 13297,
+     "offset": 107820
     },
     {
      "name": "clock_deg",
      "dtype": "float32",
-     "length": 2228,
-     "offset": 28180
+     "length": 13297,
+     "offset": 161008
     },
     {
      "name": "interval",
      "dtype": "uint32",
-     "length": 2228,
-     "offset": 37092
+     "length": 13297,
+     "offset": 214196
     },
     {
      "name": "bx_neg",
      "dtype": "uint8",
-     "length": 2228,
-     "offset": 46004
+     "length": 13297,
+     "offset": 267384
     }
    ]
   },
@@ -468,7 +468,7 @@
      {
       "name": "value",
       "dtype": "float32",
-      "length": 2228,
+      "length": 13297,
       "offset": 0
      }
     ]
@@ -479,7 +479,7 @@
      {
       "name": "value",
       "dtype": "float32",
-      "length": 2228,
+      "length": 13297,
       "offset": 0
      }
     ]
@@ -490,7 +490,7 @@
      {
       "name": "value",
       "dtype": "float32",
-      "length": 2228,
+      "length": 13297,
       "offset": 0
      }
     ]
@@ -501,7 +501,7 @@
      {
       "name": "value",
       "dtype": "float32",
-      "length": 2228,
+      "length": 13297,
       "offset": 0
      }
     ]
@@ -512,7 +512,7 @@
      {
       "name": "value",
       "dtype": "float32",
-      "length": 2228,
+      "length": 13297,
       "offset": 0
      }
     ]
@@ -523,7 +523,7 @@
      {
       "name": "value",
       "dtype": "float32",
-      "length": 2228,
+      "length": 13297,
       "offset": 0
      }
     ]
@@ -534,7 +534,7 @@
      {
       "name": "value",
       "dtype": "float32",
-      "length": 2228,
+      "length": 13297,
       "offset": 0
      }
     ]
@@ -545,7 +545,7 @@
      {
       "name": "value",
       "dtype": "float32",
-      "length": 2228,
+      "length": 13297,
       "offset": 0
      }
     ]

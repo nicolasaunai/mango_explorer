@@ -8,7 +8,7 @@
                             selection={"cone_deg": [2, 3], "Ma_sw": [2, 3]})
 
 `df` is a space_mango MangoResult (>= 0.2) or a polars DataFrame. `selection` lists grid bins
-per conditioning variable (see grid-v1.json), exactly as the explorer's URL does. The `median`, `q25`, `q75` columns come from the same fixed-edge histograms
+per conditioning variable (see grid-v2.json), exactly as the explorer's URL does. The `median`, `q25`, `q75` columns come from the same fixed-edge histograms
 as the explorer; `median_exact` is the plain median of the samples in the cell.
 """
 from __future__ import annotations

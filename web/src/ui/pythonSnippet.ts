@@ -19,7 +19,7 @@ export function pythonSnippet(s: ViewState): string {
     'import space_mango as sm',
     'from mango_explorer.atlas import COLUMNS, cell_statistics',
     '',
-    '# M_A is filtered by space_mango; clock and cone bins (grid-v1) are applied by cell_statistics.',
+    '# M_A is filtered by space_mango; clock and cone bins (grid-v2) are applied by cell_statistics.',
     `result = sm.get_data("magnetosheath", columns=list(COLUMNS), sw_paired_only=True, normalized_only=True${server.length ? ', ' + server.join(', ') : ''})`,
     `cells = cell_statistics(result, frame="${s.frame}", quantity="${s.quantity}",`,
     `                        selection={${sel.join(', ')}})`,

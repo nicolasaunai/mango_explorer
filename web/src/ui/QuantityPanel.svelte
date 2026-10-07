@@ -48,7 +48,7 @@
       <label class="num"><span>cap (R<sub>E</sub>)</span>
         <input type="range" min="0.25" max="6" step="0.25" value={app.cap} onchange={(e) => patch({ cap: Number((e.currentTarget as HTMLInputElement).value) })} />
         <span class="mono">{app.cap}</span></label>
-      <p class="na">Empty where the median distance of the k nearest samples exceeds the cap; hatched where they come from fewer than {grid.raw.knn.min_neff} spacecraft-hours. A/B compare uses bins.</p>
+      <p class="na">Empty where the median distance of the k nearest samples exceeds the cap. A/B compare uses bins.</p>
     {/if}
   </div>
 
@@ -79,6 +79,8 @@
       <input type="checkbox" disabled={!fold} checked={app.layers.includes('tint')} onchange={() => toggleLayer('tint')} />
       <span>Shock tinted by θ<sub>Bn</sub>{#if !fold}<span class="muted small"> (needs fold)</span>{/if}</span></label>
     <label class="opt"><input type="checkbox" checked={app.layers.includes('shells')} onchange={() => toggleLayer('shells')} /><span>D<sub>msh</sub> = 0.5 shell</span></label>
+    <label class="opt" title="Hatch cells whose samples come from few spacecraft passes (distinct spacecraft-hours): bins N_eff &lt; {grid.reliability.min_neff}, k-NN &lt; {grid.raw.knn.min_neff}">
+      <input type="checkbox" checked={app.neff} onchange={() => patch({ neff: !app.neff })} /><span>Flag few-pass cells (N<sub>eff</sub>)</span></label>
   </div>
   <CopyPython />
 </section>

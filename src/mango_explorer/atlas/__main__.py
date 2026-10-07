@@ -22,12 +22,12 @@ def main(argv=None) -> None:
     b.add_argument("--spacecraft", nargs="+", help="with --mango-api: only these spacecraft")
     b.add_argument("--years", nargs="+", type=int, help="with --mango-api: only these years")
     b.add_argument("--out", type=Path, required=True)
-    b.add_argument("--grid", default="grid-v1")
+    b.add_argument("--grid", default="grid-v2")
     b.add_argument("--frames", nargs="+")
     b.add_argument("--cubes", nargs="+")
     b.add_argument("--chunk-rows", type=int, default=sources.CHUNK_ROWS)
-    b.add_argument("--sample-window", type=float, metavar="SECONDS",
-                   help="k-NN sample table: keep one sample per spacecraft per window (0 = all); "
+    b.add_argument("--sample-fraction", type=float, metavar="F",
+                   help="k-NN sample table: keep this random fraction of the samples (1 = all); "
                         "default from the grid spec")
     args = p.parse_args(argv)
 
@@ -52,7 +52,7 @@ def main(argv=None) -> None:
         chunks = sources.iter_polars(synthetic_magnetosheath(args.synthetic), args.chunk_rows)
         source = {"kind": "synthetic", "rows": args.synthetic}
     m = build_atlas(chunks, grid, args.out, frames=args.frames, cube_ids=args.cubes, source=source,
-                    sample_window_s=args.sample_window)
+                    sample_fraction=args.sample_fraction)
     print(f"atlas written to {args.out}: {m['stats']}  ({m['build_seconds']} s)")
 
 
