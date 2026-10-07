@@ -6,6 +6,8 @@ import type { FrameName } from '../core/grid';
 import { imfDirection, zGsmDirection } from '../core/frames';
 import { graticule, revolutionGeometry, toThree, type RadiusFn } from './geometry';
 import { PALETTE, boundaryMaterial, earthMaterial, label } from './materials';
+import { SliceLayer, type Plane } from './slice';
+import type { LutName } from './lut';
 
 export type SceneInputs = {
   frame: FrameName;
@@ -39,6 +41,11 @@ export class SceneView {
   private ro: ResizeObserver;
   private frameRequested = false;
   private lastShape?: [RadiusFn, RadiusFn];
+  readonly slice = new SliceLayer();
+  private marker = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 12), new THREE.MeshBasicMaterial({ color: PALETTE.fg }));
+  private raycaster = new THREE.Raycaster();
+  /** Called with the physics position (X, Y, Z) of a click on the slice. */
+  onPick: ((p: [number, number, number]) => void) | null = null;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -47,13 +54,55 @@ export class SceneView {
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
     this.controls.minDistance = 20;
-    this.controls.maxDistance = 160;
-    this.controls.target.set(-1, 0, 0);
+    this.controls.maxDistance = 220;
+    this.controls.target.set(-3, 0, 0);
     this.controls.addEventListener('change', () => this.requestRender());
     this.buildStatic();
     this.setView('iso');
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(canvas.parentElement!);
+    this.scene.add(this.slice.mesh, this.marker);
+    this.marker.visible = false;
+    this.listenForPicks();
+  }
+
+  private listenForPicks() {
+    let down: { x: number; y: number } | null = null;
+    this.canvas.addEventListener('pointerdown', (e) => (down = { x: e.clientX, y: e.clientY }));
+    this.canvas.addEventListener('pointerup', (e) => {
+      if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return;
+      const r = this.canvas.getBoundingClientRect();
+      const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      this.raycaster.setFromCamera(ndc, this.camera);
+      const hit = this.slice.mesh.visible ? this.raycaster.intersectObject(this.slice.mesh)[0] : undefined;
+      if (hit) this.onPick?.([hit.point.x, -hit.point.z, hit.point.y]);
+    });
+  }
+
+  setSlice(p: { values: Float32Array; flags: Uint8Array; range: [number, number]; lut: LutName; plane: Plane; visible: boolean }) {
+    this.slice.setData(p.values, p.flags);
+    this.slice.setRange(p.range[0], p.range[1]);
+    this.slice.setLut(p.lut);
+    this.slice.setPlane(p.plane);
+    this.slice.mesh.visible = p.visible;
+    this.requestRender();
+  }
+
+  setMarker(p: [number, number, number] | null) {
+    this.marker.visible = !!p;
+    if (p) this.marker.position.set(p[0], p[2], -p[1]);
+    this.requestRender();
+  }
+
+  /** PNG of the current view; render and read back in the same task so the buffer is intact. */
+  capture(): HTMLCanvasElement {
+    this.controls.update();
+    this.renderer.render(this.scene, this.camera);
+    const c = document.createElement('canvas');
+    c.width = this.canvas.width;
+    c.height = this.canvas.height;
+    c.getContext('2d')!.drawImage(this.canvas, 0, 0);
+    return c;
   }
 
   private buildStatic() {
@@ -78,12 +127,12 @@ export class SceneView {
       new THREE.Vector3(0, -15, 0), new THREE.Vector3(0, 17, 0),
     ]);
     s.add(new THREE.LineSegments(axes, axMat));
-    this.labels.x = label('+X  Sun', PALETTE.fg); this.labels.x.position.set(28, 0, 0);
-    this.labels.y = label('+Y  dusk', PALETTE.fg); this.labels.y.position.set(0, 0, -18);
-    this.labels.imf = label('IMF', PALETTE.imf);
-    this.labels.zgsm = label('Z_GSM', PALETTE.fg, 1.3);
-    this.labels.qpar = label('Q∥', PALETTE.qpar, 1.8);
-    this.labels.qperp = label('Q⊥', PALETTE.qperp, 1.8);
+    this.labels.x = label('+X  Sun', PALETTE.fg, 1.3); this.labels.x.position.set(28, 0, 0);
+    this.labels.y = label('+Y  dusk', PALETTE.fg, 1.3); this.labels.y.position.set(0, 0, -18);
+    this.labels.imf = label('IMF', PALETTE.imf, 1.3);
+    this.labels.zgsm = label('Z_GSM', PALETTE.fg, 1.1);
+    this.labels.qpar = label('Q∥', PALETTE.qpar, 1.5);
+    this.labels.qperp = label('Q⊥', PALETTE.qperp, 1.5);
     Object.values(this.labels).forEach((l) => s.add(l));
     this.imfGhost.line.material = new THREE.LineBasicMaterial({ color: PALETTE.imf, transparent: true, opacity: 0.35 });
     (this.imfGhost.cone.material as THREE.MeshBasicMaterial).transparent = true;
@@ -100,7 +149,7 @@ export class SceneView {
       this.zLabel.material.map?.dispose();
       this.zLabel.material.dispose();
     }
-    this.zLabel = label(frame === 'GSM' ? '+Z GSM' : '+Z PGSM  (IMF⊥)', PALETTE.fg);
+    this.zLabel = label(frame === 'GSM' ? '+Z GSM' : '+Z PGSM (IMF⊥)', PALETTE.fg, 1.3);
     this.zLabel.position.set(0, 18.5, 0);
     this.scene.add(this.zLabel);
   }
@@ -118,6 +167,7 @@ export class SceneView {
       grp.userData.geo = geo;
       return grp;
     };
+    this.slice.setBoundaries(rMp, rBs);
     this.mp = make(rMp, this.mpMat, PALETTE.mp, 0.2, 1);
     this.bs = make(rBs, this.bsMat, PALETTE.bs, 0.15, 2);
     this.scene.add(this.mp, this.bs);
@@ -178,7 +228,7 @@ export class SceneView {
   }
 
   setView(v: CameraPreset) {
-    const R = 70, t = this.controls.target;
+    const R = 105, t = this.controls.target;
     const dir: Record<CameraPreset, [number, number, number]> = {
       iso: [0.55, 0.42, 0.72], sun: [1, 0, 0], dusk: [0, 0, -1], north: [0.02, 1, 0.001], tail: [-1, 0.08, 0],
     };

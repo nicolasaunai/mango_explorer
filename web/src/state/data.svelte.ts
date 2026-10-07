@@ -2,6 +2,7 @@
 import { httpFetcher, loadManifest, loadSections, type Manifest, type Selection } from '../core/atlas';
 import { HourTable } from '../core/hours';
 import type { ViewState } from './schema';
+import { startWorker } from './stats.svelte';
 
 type Status = 'loading' | 'ready' | 'missing' | 'error';
 
@@ -14,6 +15,7 @@ export async function loadAtlas(base = new URL('atlas/', document.baseURI).href)
   try {
     const manifest = await loadManifest(fetchBytes);
     data.hours = new HourTable(await loadSections(fetchBytes, manifest.hours));
+    await startWorker(base);
     data.manifest = manifest;
     data.status = 'ready';
   } catch (e) {

@@ -3,7 +3,8 @@ import { DEFAULT_STATE, clockUndefined, decodeHash, encodeHash } from './schema'
 
 describe('URL state', () => {
   it('round-trips', () => {
-    const s = { ...DEFAULT_STATE, frame: 'GSM' as const, clock: [11, 0], cone: [4], view: 'north' as const };
+    const s = { ...DEFAULT_STATE, frame: 'GSM' as const, clock: [11, 0], cone: [4], view: 'north' as const,
+      lut: 'cividis' as const, shell: 2, probe: 1234, range: [0.25, 0.75] as [number, number] };
     expect(decodeHash(encodeHash(s))).toEqual(s);
   });
   it('falls back field by field on bad input', () => {

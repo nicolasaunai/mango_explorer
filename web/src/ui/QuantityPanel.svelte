@@ -54,6 +54,7 @@
 
   <div class="ctl">
     <span class="eyebrow">Layers</span>
+    <label class="opt"><input type="checkbox" checked={app.layers.includes('slice')} onchange={() => toggleLayer('slice')} /><span>Data on slice plane</span></label>
     <label class="opt"><input type="checkbox" checked={app.layers.includes('mp')} onchange={() => toggleLayer('mp')} /><span>Magnetopause</span></label>
     <label class="opt"><input type="checkbox" checked={app.layers.includes('bs')} onchange={() => toggleLayer('bs')} /><span>Bow shock</span></label>
     <label class="opt" class:off={!fold} title={fold ? '' : 'The quasi-parallel side depends on the sign of Bx unless the IMF polarity is folded'}>

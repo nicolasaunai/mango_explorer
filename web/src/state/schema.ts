@@ -1,6 +1,7 @@
 // Everything a view depends on, serialized in the URL hash so a link reproduces the view.
 import { z } from 'zod';
 import { grid, type QuantityName } from '../core/grid';
+import { LUT_NAMES, type LutName } from '../render/lut';
 
 const bins = (n: number) => z.array(z.number().int().min(0).max(n - 1)).min(1);
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -23,6 +24,10 @@ export const ViewState = z.object({
   plane: z.enum(PLANES),
   view: z.enum(VIEWS),
   layers: z.array(z.enum(LAYERS)),
+  lut: z.enum(LUT_NAMES as [LutName, ...LutName[]]),
+  shell: z.number().int().min(0).max(grid.spatialShape[0] - 1),
+  probe: z.number().int().min(-1).max(grid.nCells - 1),
+  range: z.tuple([z.number(), z.number()]).nullable(),
 });
 export type ViewState = z.infer<typeof ViewState>;
 
@@ -37,6 +42,10 @@ export const DEFAULT_STATE: ViewState = {
   plane: 'XZ',
   view: 'iso',
   layers: ['mp', 'bs', 'tint', 'slice'],
+  lut: 'batlow',
+  shell: 5,
+  probe: -1,
+  range: null,
 };
 
 export const PRESETS: { id: string; label: string; hint: string; state: Partial<ViewState> }[] = [
@@ -54,7 +63,10 @@ export function encodeHash(s: ViewState): string {
   const p = new URLSearchParams({
     f: s.frame, clk: list(s.clock), cone: list(s.cone), ma: list(s.ma),
     q: s.quantity, st: s.stat, pl: s.plane, v: s.view, ly: s.layers.join('.'),
+    cm: s.lut, sh: String(s.shell),
   });
+  if (s.probe >= 0) p.set('pr', String(s.probe));
+  if (s.range) p.set('cr', s.range.map((x) => +x.toPrecision(5)).join('~'));
   return '#' + p.toString();
 }
 
@@ -66,6 +78,10 @@ export function decodeHash(hash: string): ViewState {
     ma: unlist(p.get('ma')), quantity: p.get('q') ?? undefined, stat: p.get('st') ?? undefined,
     plane: p.get('pl') ?? undefined, view: p.get('v') ?? undefined,
     layers: p.has('ly') ? (p.get('ly') || '').split('.').filter(Boolean) : undefined,
+    lut: p.get('cm') ?? undefined,
+    shell: p.has('sh') ? Number(p.get('sh')) : undefined,
+    probe: p.has('pr') ? Number(p.get('pr')) : undefined,
+    range: p.has('cr') ? p.get('cr')!.split('~').map(Number) : undefined,
   };
   const out = { ...DEFAULT_STATE } as Record<string, unknown>;
   for (const [k, v] of Object.entries(candidate)) {

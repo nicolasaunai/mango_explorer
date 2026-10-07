@@ -4,12 +4,22 @@
   import QuantityPanel from './ui/QuantityPanel.svelte';
   import Viewport from './ui/Viewport.svelte';
   import { app, patch, syncHash } from './state/app.svelte';
-  import { data, loadAtlas } from './state/data.svelte';
+  import { data, loadAtlas, selectionOf } from './state/data.svelte';
+  import { runQuery } from './state/stats.svelte';
+  import Colorbar from './ui/Colorbar.svelte';
+  import ThetaPhiMap from './ui/ThetaPhiMap.svelte';
+  import DepthProfile from './ui/DepthProfile.svelte';
 
   syncHash();
   onMount(() => { loadAtlas(); });
 
-  let tab = $state<'cond' | 'qty'>('cond');
+  // Re-run the statistics whenever anything they depend on changes; the worker answers the latest.
+  $effect(() => {
+    if (data.status !== 'ready') return;
+    runQuery(app.frame, app.quantity, app.stat, selectionOf(app));
+  });
+
+  let tab = $state<'cond' | 'qty' | 'views'>('cond');
   const pgsm = $derived(app.frame !== 'GSM');
   const setFrame = (f: 'GSM' | 'PGSM') => patch({ frame: f === 'GSM' ? 'GSM' : 'PGSM_fold' });
   const toggleFold = () => patch({ frame: app.frame === 'PGSM_fold' ? 'PGSM' : 'PGSM_fold' });
@@ -39,16 +49,20 @@
   <main class="view"><Viewport /></main>
   <aside class="right" class:active={tab === 'qty'}><QuantityPanel /></aside>
 
-  <section class="strip" aria-label="Linked views">
-    <div class="placeholder">XY · XZ · YZ slices</div>
-    <div class="placeholder"><span>θ–φ map at D<sub>msh</sub> = 0.5</span></div>
-    <div class="placeholder">MP → BS depth profile</div>
-    <p class="muted small">Data layers and linked views arrive in M1. This build shows the geometry, the frames and live data coverage.</p>
+  <section class="strip" class:active={tab === 'views'} aria-label="Linked views">
+    {#if data.status === 'ready'}
+      <div class="cbwrap"><Colorbar /></div>
+      <ThetaPhiMap />
+      <DepthProfile />
+    {:else}
+      <p class="muted small">{data.status === 'missing' ? 'No atlas found next to the app: the view shows geometry only. Build one with python -m mango_explorer.atlas build and copy it to web/public/atlas.' : data.status === 'error' ? `The atlas could not be loaded: ${data.message}` : 'Loading the atlas…'}</p>
+    {/if}
   </section>
 
   <nav class="tabs" aria-label="Panels">
     <button type="button" aria-pressed={tab === 'cond'} onclick={() => (tab = 'cond')}>Conditions</button>
     <button type="button" aria-pressed={tab === 'qty'} onclick={() => (tab = 'qty')}>Quantity</button>
+    <button type="button" aria-pressed={tab === 'views'} onclick={() => (tab = 'views')}>Views</button>
   </nav>
 </div>
 
@@ -57,7 +71,7 @@
     height: 100%;
     display: grid;
     grid-template-columns: 260px minmax(0, 1fr) 240px;
-    grid-template-rows: auto minmax(0, 1fr) 120px;
+    grid-template-rows: auto minmax(0, 1fr) 150px;
     grid-template-areas: 'top top top' 'left view right' 'left strip right';
   }
   .top { grid-area: top; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
@@ -75,8 +89,8 @@
   .left { grid-area: left; border-right: 1px solid var(--rule); }
   .right { grid-area: right; border-left: 1px solid var(--rule); }
   .view { grid-area: view; min-height: 0; }
-  .strip { grid-area: strip; display: grid; grid-template-columns: repeat(3, 1fr) 1.2fr; gap: 8px; padding: 8px; border-top: 1px solid var(--rule); align-items: stretch; }
-  .placeholder { border: 1px dashed var(--rule); border-radius: 4px; display: grid; place-items: center; font: 11px var(--f-mono); color: var(--muted); }
+  .strip { grid-area: strip; display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; padding: 10px 14px; border-top: 1px solid var(--rule); align-items: start; background: var(--panel); overflow: hidden; }
+  .cbwrap { min-width: 0; }
   .small { font-size: 12px; margin: 0; align-self: center; }
   .tabs { display: none; }
 
@@ -84,14 +98,16 @@
     .shell { grid-template-columns: 240px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto;
       grid-template-areas: 'top top' 'left view' 'right strip'; }
     .right { border-left: 0; border-top: 1px solid var(--rule); border-right: 1px solid var(--rule); max-height: 40vh; }
-    .strip { grid-template-columns: 1fr 1fr; }
+    .strip { grid-template-columns: 1fr 1fr; overflow-y: auto; }
+    .cbwrap { grid-column: 1 / -1; }
   }
   @media (max-width: 720px) {
     .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(300px, 52vh) minmax(0, 1fr) auto;
       grid-template-areas: 'top' 'view' 'panel' 'tabs'; }
     .left, .right { grid-area: panel; display: none; border: 0; border-top: 1px solid var(--rule); }
     .left.active, .right.active { display: block; }
-    .strip { display: none; }
+    .strip { grid-area: panel; display: none; grid-template-columns: minmax(0, 1fr); border: 0; overflow-y: auto; }
+    .strip.active { display: grid; }
     .tabs { grid-area: tabs; display: flex; border-top: 1px solid var(--rule); background: var(--panel);
       padding-bottom: env(safe-area-inset-bottom, 0px); }
     .tabs button { flex: 1; padding: 12px; background: none; border: 0; color: var(--muted); font: 13px var(--f-body); }
