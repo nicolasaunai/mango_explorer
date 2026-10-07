@@ -32,6 +32,31 @@ def iter_arrow_files(paths, chunk_rows: int = CHUNK_ROWS) -> Iterator[dict[str, 
         yield from iter_polars(pl.read_ipc(p, columns=list(COLUMNS)), chunk_rows)
 
 
+def iter_mango_api(spacecraft=None, years=None, log=print) -> Iterator[dict[str, np.ndarray]]:
+    """Rows from the MANGO server through space_mango (>= 0.2), one spacecraft-year at a time.
+
+    The client caches monthly per-column fragments locally (keyed by dataset version), so an
+    interrupted build resumes without re-downloading. Only the columns the atlas uses are fetched.
+    """
+    import space_mango as sm
+
+    table = sm.spacecraft("magnetosheath")
+    rows = table.iter_rows(named=True) if hasattr(table, "iter_rows") else table
+    for info in rows:
+        sc, start, stop = info["sc"], info["start"], info["stop"]
+        if spacecraft and sc not in spacecraft:
+            continue
+        for year in range(int(str(start)[:4]), int(str(stop)[:4]) + 1):
+            if years and year not in years:
+                continue
+            df = sm.get_data("magnetosheath", columns=list(COLUMNS), spacecraft=sc,
+                             start=f"{year}-01-01", stop=f"{year + 1}-01-01",
+                             sw_paired_only=True, normalized_only=True).to_polars()
+            log(f"  {sc} {year}: {df.height:,} rows")
+            if df.height:
+                yield from iter_polars(df)
+
+
 def iter_hive_parquet(region_dir, chunk_rows: int = CHUNK_ROWS) -> Iterator[dict[str, np.ndarray]]:
     """The server's on-disk layout: <region>/SC=<name>/part-*.parquet, streamed by row batches."""
     import polars as pl

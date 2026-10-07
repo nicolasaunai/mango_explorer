@@ -14,14 +14,14 @@ export function pythonSnippet(s: ViewState): string {
   const server = [lo > 0 ? `ma_sw_min=${lo}` : '', hi < 1e8 ? `ma_sw_max=${hi}` : ''].filter(Boolean);
   const stat = s.stat === 'neff' ? 'neff' : s.stat === 'n' ? 'n' : s.stat === 'q25' ? 'q25' : s.stat === 'q75' ? 'q75' : 'median';
   return [
+    '# space-mango >= 0.2: downloads are cached locally as monthly per-column fragments',
     'import polars as pl',
     'import space_mango as sm',
     'from mango_explorer.atlas import COLUMNS, cell_statistics',
     '',
-    '# The server filters M_A; clock and cone bins (grid-v1) are applied locally.',
-    '# Without an M_A filter this downloads the whole magnetosheath table: consider spacecraft= or time_min=.',
-    `df = sm.get_data("magnetosheath", columns=list(COLUMNS), sw_paired_only=True, normalized_only=True${server.length ? ', ' + server.join(', ') : ''})`,
-    `cells = cell_statistics(df, frame="${s.frame}", quantity="${s.quantity}",`,
+    '# M_A is filtered by space_mango; clock and cone bins (grid-v1) are applied by cell_statistics.',
+    `result = sm.get_data("magnetosheath", columns=list(COLUMNS), sw_paired_only=True, normalized_only=True${server.length ? ', ' + server.join(', ') : ''})`,
+    `cells = cell_statistics(result, frame="${s.frame}", quantity="${s.quantity}",`,
     `                        selection={${sel.join(', ')}})`,
     `print(cells.filter(pl.col("reliable")).sort("${stat}"))`,
   ].join('\n');

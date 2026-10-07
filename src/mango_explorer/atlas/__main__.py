@@ -17,6 +17,10 @@ def main(argv=None) -> None:
     src.add_argument("--arrow", nargs="+", type=Path, help="Arrow IPC files from the MANGO server")
     src.add_argument("--parquet-dir", type=Path, help="<MANGO_DATA_DIR>/magnetosheath")
     src.add_argument("--synthetic", type=int, metavar="N_ROWS", help="synthetic rows (testing)")
+    src.add_argument("--mango-api", action="store_true",
+                     help="download from the MANGO server with space_mango >= 0.2 (cached, resumable)")
+    b.add_argument("--spacecraft", nargs="+", help="with --mango-api: only these spacecraft")
+    b.add_argument("--years", nargs="+", type=int, help="with --mango-api: only these years")
     b.add_argument("--out", type=Path, required=True)
     b.add_argument("--grid", default="grid-v1")
     b.add_argument("--frames", nargs="+")
@@ -31,6 +35,14 @@ def main(argv=None) -> None:
     if args.arrow:
         chunks = sources.iter_arrow_files(args.arrow, args.chunk_rows)
         source = {"kind": "arrow", "files": [f.name for f in args.arrow]}
+    elif args.mango_api:
+        import space_mango as sm
+
+        chunks = sources.iter_mango_api(args.spacecraft, args.years)
+        info = sm.dataset_info()
+        version = info["version"] if isinstance(info, dict) else getattr(info, "version", None)
+        source = {"kind": "mango-api", "dataset_version": version,
+                  "spacecraft": args.spacecraft or "all", "years": args.years or "all"}
     elif args.parquet_dir:
         chunks = sources.iter_hive_parquet(args.parquet_dir, args.chunk_rows)
         source = {"kind": "hive-parquet", "dir": str(args.parquet_dir)}
