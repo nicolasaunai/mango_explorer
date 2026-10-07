@@ -10,17 +10,22 @@ permissions:
   pages: write
   id-token: write
 
+env:
+  # The MANGO atlas is built offline (python -m mango_explorer.atlas build --mango-api, then
+  # `pack`) and attached to this release; bump the tag to publish a new atlas.
+  ATLAS_TAG: atlas-2026.0-grid-v2
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.12' }
-      - run: pip install -e ".[atlas]"
-      # The public site ships a synthetic atlas until the data policy for a real one is settled;
-      # the app labels it "synthetic data" in its header.
-      - run: python -m mango_explorer.atlas build --synthetic 400000 --out web/public/atlas
+      - name: Fetch the published MANGO atlas
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          gh release download "$ATLAS_TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.tar' --dir "$RUNNER_TEMP/atlas"
+          mkdir -p web/public/atlas
+          tar -xf "$RUNNER_TEMP"/atlas/*.tar -C web/public/atlas
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
       - run: cd web && npm ci && npm run build

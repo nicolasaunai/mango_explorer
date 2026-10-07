@@ -34,6 +34,10 @@ def _write_sections(path: Path, sections: list[tuple[str, np.ndarray]]) -> list[
 
 def _read_sections(path: Path, meta: list[dict]) -> dict[str, np.ndarray]:
     raw = path.read_bytes()
+    if path.suffix == ".gz":
+        import gzip
+
+        raw = gzip.decompress(raw)
     return {s["name"]: np.frombuffer(raw, dtype=np.dtype(s["dtype"]).newbyteorder("<"),
                                      count=s["length"], offset=s["offset"]) for s in meta}
 
@@ -148,10 +152,46 @@ def write_atlas(root: Path, grid: Grid, cubes: list[CubeData], hours: dict[str, 
     return manifest
 
 
+def pack_atlas(src: Path, dst: Path) -> dict:
+    """Copy an atlas with every binary file gzipped (``.bin.gz``) for static hosting.
+
+    The browser decompresses these itself, so the host needs no special configuration.
+    """
+    import gzip
+    import shutil
+
+    src, dst = Path(src), Path(dst)
+    manifest = json.loads((src / "manifest.json").read_text())
+    if dst.exists():
+        shutil.rmtree(dst)
+
+    def pack(entry: dict) -> None:
+        data = (src / entry["path"]).read_bytes()
+        entry["path"] += ".gz"
+        out = dst / entry["path"]
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(gzip.compress(data, compresslevel=9, mtime=0))
+
+    pack(manifest["hours"])
+    for cube in manifest["cubes"]:
+        for f in cube["quantities"].values():
+            pack(f)
+        pack(cube["counts"])
+        if "spacecraft" in cube:
+            pack(cube["spacecraft"])
+    if "samples" in manifest:
+        pack(manifest["samples"]["base"])
+        for f in manifest["samples"]["quantities"].values():
+            pack(f)
+    manifest["encoding"] = "gzip"
+    (dst / "manifest.json").write_text(json.dumps(manifest, indent=1))
+    return manifest
+
+
 def read_atlas(root: Path):
     root = Path(root)
     manifest = json.loads((root / "manifest.json").read_text())
     grid = load_grid(manifest["grid"])
     cubes = [read_cube(root, e, grid) for e in manifest["cubes"]]
-    hours = _read_sections(root / "hours.bin", manifest["hours"]["sections"])
+    hours = _read_sections(root / manifest["hours"]["path"], manifest["hours"]["sections"])
     return manifest, cubes, hours

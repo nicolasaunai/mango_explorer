@@ -9,6 +9,7 @@
   import Colorbar from './ui/Colorbar.svelte';
   import ThetaPhiMap from './ui/ThetaPhiMap.svelte';
   import DepthProfile from './ui/DepthProfile.svelte';
+  import Cite from './ui/Cite.svelte';
 
   syncHash();
   onMount(() => { loadAtlas(); });
@@ -47,6 +48,7 @@
     </div>
     <div class="status mono">
       {#if data.status === 'ready' && data.manifest?.source?.kind === 'synthetic'}<span class="synthetic">synthetic data · not MANGO</span>
+      {:else if data.status === 'ready' && data.manifest?.source?.kind === 'mango-api'}<Cite />
       {:else if data.status === 'ready'}atlas {data.manifest?.grid} · {data.manifest?.source?.kind}
       {:else if data.status === 'missing'}no atlas · geometry only
       {:else if data.status === 'error'}atlas error{:else}loading…{/if}

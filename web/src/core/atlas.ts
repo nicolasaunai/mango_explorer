@@ -10,7 +10,9 @@ export type CubeEntry = {
 };
 export type Manifest = {
   format: string; grid: string; created: string;
-  stats: Record<string, number>; source: Record<string, unknown>;
+  stats: Record<string, number>;
+  source: { kind?: string; dataset_version?: string; citation?: string; [k: string]: unknown };
+  encoding?: 'gzip';
   hours: FileEntry & { n_rows: number };
   cubes: CubeEntry[];
   samples?: { cube: string; window_s: number; n: number; base: FileEntry; quantities: Record<string, FileEntry> };
@@ -142,8 +144,18 @@ export async function loadManifest(fetchBytes: FetchBytes): Promise<Manifest> {
   return JSON.parse(text) as Manifest;
 }
 
+/** Gunzip bytes that start with the gzip magic number; return anything else unchanged
+ * (a host may already have decompressed a .gz file while serving it). */
+export async function maybeGunzip(buf: ArrayBuffer): Promise<ArrayBuffer> {
+  const head = new Uint8Array(buf, 0, Math.min(2, buf.byteLength));
+  if (head[0] !== 0x1f || head[1] !== 0x8b) return buf;
+  const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Response(stream).arrayBuffer();
+}
+
 export const httpFetcher = (base: string): FetchBytes => async (path) => {
   const r = await fetch(new URL(path, base));
   if (!r.ok) throw new Error(`could not load ${path}: HTTP ${r.status}`);
-  return r.arrayBuffer();
+  const buf = await r.arrayBuffer();
+  return path.endsWith('.gz') ? maybeGunzip(buf) : buf;
 };

@@ -153,3 +153,15 @@ describe('k-NN', () => {
     });
   });
 });
+
+describe('packed atlases', () => {
+  it('gunzips .gz payloads and leaves plain bytes alone', async () => {
+    const { gzipSync } = await import('node:zlib');
+    const { maybeGunzip } = await import('./atlas');
+    const plain = new Uint8Array([1, 2, 3, 250]);
+    const gz = gzipSync(plain);
+    const out = new Uint8Array(await maybeGunzip(gz.buffer.slice(gz.byteOffset, gz.byteOffset + gz.byteLength) as ArrayBuffer));
+    expect(Array.from(out)).toEqual([1, 2, 3, 250]);
+    expect(Array.from(new Uint8Array(await maybeGunzip(plain.buffer)))).toEqual([1, 2, 3, 250]);
+  });
+});

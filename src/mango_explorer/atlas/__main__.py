@@ -29,7 +29,16 @@ def main(argv=None) -> None:
     b.add_argument("--sample-fraction", type=float, metavar="F",
                    help="k-NN sample table: keep this random fraction of the samples (1 = all); "
                         "default from the grid spec")
+    pk = sub.add_parser("pack", help="gzip an atlas for static hosting")
+    pk.add_argument("src", type=Path)
+    pk.add_argument("dst", type=Path)
     args = p.parse_args(argv)
+    if args.cmd == "pack":
+        from mango_explorer.atlas.store import pack_atlas
+
+        pack_atlas(args.src, args.dst)
+        print(f"packed {args.src} -> {args.dst}")
+        return
 
     grid = load_grid(args.grid)
     if args.arrow:
@@ -41,7 +50,8 @@ def main(argv=None) -> None:
         chunks = sources.iter_mango_api(args.spacecraft, args.years)
         info = sm.dataset_info()
         version = info["version"] if isinstance(info, dict) else getattr(info, "version", None)
-        source = {"kind": "mango-api", "dataset_version": version,
+        citation = info.get("citation") if isinstance(info, dict) else getattr(info, "citation", None)
+        source = {"kind": "mango-api", "dataset_version": version, "citation": citation,
                   "spacecraft": args.spacecraft or "all", "years": args.years or "all"}
     elif args.parquet_dir:
         chunks = sources.iter_hive_parquet(args.parquet_dir, args.chunk_rows)

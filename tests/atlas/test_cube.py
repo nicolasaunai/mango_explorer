@@ -130,3 +130,19 @@ def test_cell_statistics_matches_the_cube(df, cubes):
     # histogram medians stay within one bin of the exact medians (log bin width ~0.05 dex)
     ratio = np.log10(cells["median"].to_numpy() / cells["median_exact"].to_numpy())
     assert np.nanmax(np.abs(ratio)) < (np.log10(20) - np.log10(0.05)) / 48
+
+
+def test_packed_atlas_reads_back_identically(tmp_path, df):
+    from mango_explorer.atlas.store import pack_atlas, read_samples
+
+    build_atlas(iter_polars(df, 15_000), G, tmp_path / "raw", log=lambda *_: None)
+    manifest = pack_atlas(tmp_path / "raw", tmp_path / "packed")
+    assert manifest["encoding"] == "gzip"
+    assert not list((tmp_path / "packed").rglob("*.bin"))
+    m1, c1, h1 = read_atlas(tmp_path / "raw")
+    m2, c2, h2 = read_atlas(tmp_path / "packed")
+    np.testing.assert_array_equal(h1["n"], h2["n"])
+    a, b = c1[0].query({"cone_deg": [2]}), c2[0].query({"cone_deg": [2]})
+    np.testing.assert_array_equal(a["hist"]["Np"], b["hist"]["Np"])
+    np.testing.assert_array_equal(read_samples(tmp_path / "raw", m1["samples"])["x"],
+                                  read_samples(tmp_path / "packed", m2["samples"])["x"])

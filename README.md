@@ -33,6 +33,17 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]" polars pyarrow hypoth
 .venv/bin/python scripts/make_goldens.py
 ```
 
+To publish an atlas on the website:
+
+```bash
+.venv/bin/python -m mango_explorer.atlas build --mango-api --sample-fraction 0.03 --out atlas-raw/
+.venv/bin/python -m mango_explorer.atlas pack atlas-raw/ atlas-public/      # gzip, ~180 MB
+tar -cf mango-atlas-<version>.tar -C atlas-public .
+gh release create atlas-<version> mango-atlas-<version>.tar
+```
+
+Then set `ATLAS_TAG` in `.github/workflows/deploy.yml`.
+
 ## Web
 
 ```bash
