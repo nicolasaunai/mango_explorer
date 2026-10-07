@@ -30,6 +30,9 @@ export const ViewState = z.object({
   range: z.tuple([z.number(), z.number()]).nullable(),
   pinA: z.object({ clock: bins(N_CLOCK), cone: bins(N_CONE), ma: bins(N_MA) }).nullable(),
   cmp: z.enum(['A', 'B', 'diff']),
+  source: z.enum(['bins', 'knn']),
+  k: z.number().int().min(5).max(500),
+  cap: z.number().min(0.25).max(10),
 });
 export type ViewState = z.infer<typeof ViewState>;
 
@@ -50,6 +53,9 @@ export const DEFAULT_STATE: ViewState = {
   range: null,
   pinA: null,
   cmp: 'B',
+  source: 'bins',
+  k: grid.raw.knn.k,
+  cap: grid.raw.knn.cap_re,
 };
 
 export const PRESETS: { id: string; label: string; hint: string; state: Partial<ViewState> }[] = [
@@ -71,6 +77,7 @@ export function encodeHash(s: ViewState): string {
   });
   if (s.probe >= 0) p.set('pr', String(s.probe));
   if (s.range) p.set('cr', s.range.map((x) => +x.toPrecision(5)).join('~'));
+  if (s.source === 'knn') { p.set('src', 'knn'); p.set('k', String(s.k)); p.set('cap', String(s.cap)); }
   if (s.pinA) { p.set('pa', [s.pinA.clock, s.pinA.cone, s.pinA.ma].map(list).join('~')); p.set('cmp', s.cmp); }
   return '#' + p.toString();
 }
@@ -89,6 +96,9 @@ export function decodeHash(hash: string): ViewState {
     range: p.has('cr') ? p.get('cr')!.split('~').map(Number) : undefined,
     pinA: p.has('pa') ? (([clock, cone, ma]) => ({ clock: unlist(clock), cone: unlist(cone), ma: unlist(ma) }))(p.get('pa')!.split('~')) : undefined,
     cmp: p.get('cmp') ?? undefined,
+    source: p.get('src') ?? undefined,
+    k: p.has('k') ? Number(p.get('k')) : undefined,
+    cap: p.has('cap') ? Number(p.get('cap')) : undefined,
   };
   const out = { ...DEFAULT_STATE } as Record<string, unknown>;
   for (const [k, v] of Object.entries(candidate)) {

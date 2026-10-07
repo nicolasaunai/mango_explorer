@@ -7,7 +7,16 @@
   import { grid } from '../core/grid';
   import { richText } from './format';
 
-  const p = $derived(stats.probe && stats.probe.cell === app.probe ? stats.probe : null);
+  const knn = $derived(app.source === 'knn');
+  const kp = $derived(knn && stats.knnProbe && stats.knnProbe.cell === app.probe ? stats.knnProbe : null);
+  // k-NN probes report the neighbours of the cell centre; build the same shape as a bins probe
+  const kpAsProbe = $derived.by(() => {
+    if (!kp) return null;
+    const e = grid.histAxisEdges(app.quantity), nb = e.length - 1, hist = new Uint32Array(nb);
+    for (const v of kp.values) hist[Math.min(nb - 1, Math.max(0, Math.floor(((v - e[0]) / (e[nb] - e[0])) * nb)))]++;
+    return { n: kp.result.n, neffUpper: kp.result.neff, q25: kp.result.q25, q50: kp.result.median, q75: kp.result.q75, hist, spacecraft: [] as { name: string; n: number }[] };
+  });
+  const p = $derived(knn ? kpAsProbe : stats.probe && stats.probe.cell === app.probe ? stats.probe : null);
   // median of the pinned set A in the same cell, when comparing
   const aMedian = $derived(app.pinA && stats.resultA && app.probe >= 0 && (app.stat === 'median')
     ? stats.resultA.values[app.probe] : NaN);
@@ -29,7 +38,10 @@
       <button type="button" class="x" aria-label="Close probe" onclick={() => patch({ probe: -1 })}>×</button>
     </header>
     <div class="where mono">D {b.d[0].toFixed(1)}–{b.d[1].toFixed(1)} · θ {b.theta[0]}–{b.theta[1]}° · φ {b.phi[0]}–{b.phi[1]}°</div>
-    {#if p && p.n > 0}
+    {#if knn && kp}
+      <div class="mono muted">{kp.result.n} neighbours · median distance {Number.isFinite(kp.result.distMedian) ? kp.result.distMedian.toFixed(2) : '—'} R<sub>E</sub> (cap {app.cap})</div>
+    {/if}
+    {#if p && p.n > 0 && Number.isFinite(p.q50)}
       <div class="val"><span class="big mono">{formatValue(phys(p.q50))}</span>
         <span class="muted">{@html richText(grid.raw.quantities[app.quantity].label)}{#if unit}&nbsp;{@html richText(unit)}{/if}</span></div>
       <div class="mono muted">IQR {formatValue(phys(p.q25))} – {formatValue(phys(p.q75))}</div>
@@ -55,9 +67,11 @@
       {/if}
       <div class="counts mono">
         <span>N {fmt.format(p.n)}</span>
-        <span>N<sub>eff</sub> ≤ {fmt.format(p.neffUpper)}</span>
+        <span>N<sub>eff</sub> {knn ? '' : '≤ '}{fmt.format(p.neffUpper)}</span>
         {#if flag === FLAG.WEAK}<span class="weak">below reliability threshold</span>{/if}
       </div>
+    {:else if p && knn}
+      <div class="muted">No value: the median neighbour distance exceeds the cap.</div>
     {:else if p}
       <div class="muted">No samples here for this selection.</div>
     {:else}

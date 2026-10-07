@@ -28,6 +28,10 @@ uniform vec3 uStep;          // phi, theta, D bin widths
 uniform ivec3 uShape;        // n_phi, n_theta, n_D
 uniform float uOpacity;
 uniform vec3 uHatch;
+uniform int uMode;           // 0: grid cells, 1: field on the plane (k-NN)
+uniform sampler2D uField;    // r = value, g = flag, over [-uHalf, uHalf]^2 in plane coordinates
+uniform float uHalf;
+uniform int uPlane;          // 0: XZ, 1: XY, 2: YZ (physics axes of the plane's u, v)
 in vec3 vW;
 out vec4 fragColor;
 void main() {
@@ -41,8 +45,16 @@ void main() {
   vec2 b = texelFetch(uBounds, ivec2(int(th / 180.0 * ${N_BOUNDS - 1}.0 + 0.5), 0), 0).rg;
   float D = (r - b.r) / (b.g - b.r);
   if (D < 0.0 || D > 1.0) discard;
-  ivec3 c = min(ivec3(int(ph / uStep.x), int(th / uStep.y), int(D / uStep.z)), uShape - 1);
-  vec2 v = texelFetch(uData, c, 0).rg;
+  vec2 v;
+  if (uMode == 0) {
+    ivec3 c = min(ivec3(int(ph / uStep.x), int(th / uStep.y), int(D / uStep.z)), uShape - 1);
+    v = texelFetch(uData, c, 0).rg;
+  } else {
+    vec2 uv = uPlane == 0 ? P.xz : uPlane == 1 ? P.xy : P.yz;
+    ivec2 n = textureSize(uField, 0);
+    ivec2 t = clamp(ivec2((uv + uHalf) / (2.0 * uHalf) * vec2(n)), ivec2(0), n - 1);
+    v = texelFetch(uField, t, 0).rg;
+  }
   if (v.g < 0.5) { fragColor = vec4(uHatch, 0.10 * uOpacity); return; }
   float t = clamp((v.r - uRange.x) / (uRange.y - uRange.x), 0.0, 1.0);
   vec3 col = texture(uLut, vec2(t, 0.5)).rgb;
@@ -58,6 +70,7 @@ export class SliceLayer {
   private data: THREE.Data3DTexture;
   private bounds: THREE.DataTexture;
   private material: THREE.ShaderMaterial;
+  private field: THREE.DataTexture | null = null;
 
   constructor() {
     const [nd, nt, nphi] = grid.spatialShape;
@@ -80,6 +93,7 @@ export class SliceLayer {
         uStep: { value: new THREE.Vector3(grid.phiEdges[1] - grid.phiEdges[0], grid.thetaEdges[1] - grid.thetaEdges[0], grid.dEdges[1] - grid.dEdges[0]) },
         uShape: { value: new Int32Array([nphi, nt, nd]) },
         uOpacity: { value: 0.94 }, uHatch: { value: new THREE.Color('#3A4655') },
+        uMode: { value: 0 }, uField: { value: null }, uHalf: { value: 32 }, uPlane: { value: 0 },
       },
     });
     this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), this.material);
@@ -98,6 +112,7 @@ export class SliceLayer {
   }
 
   setData(values: Float32Array, flags: Uint8Array) {
+    this.useCells();
     const a = this.data.image.data as unknown as Float32Array;
     for (let c = 0; c < values.length; c++) {
       a[2 * c] = Number.isFinite(values[c]) ? values[c] : 0;
@@ -105,6 +120,27 @@ export class SliceLayer {
     }
     this.data.needsUpdate = true;
     this.mesh.visible = true;
+  }
+
+  /** A field sampled on an n x n grid of plane coordinates in [-half, half]^2 (k-NN mode). */
+  setField(values: Float32Array, flags: Uint8Array, n: number, half: number) {
+    const data = new Float32Array(n * n * 2);
+    for (let i = 0; i < n * n; i++) {
+      data[2 * i] = Number.isFinite(values[i]) ? values[i] : 0;
+      data[2 * i + 1] = Number.isFinite(values[i]) ? flags[i] : 0;
+    }
+    this.field?.dispose();
+    this.field = new THREE.DataTexture(data, n, n, THREE.RGFormat, THREE.FloatType);
+    this.field.minFilter = this.field.magFilter = THREE.NearestFilter;
+    this.field.needsUpdate = true;
+    this.material.uniforms.uField.value = this.field;
+    this.material.uniforms.uHalf.value = half;
+    this.material.uniforms.uMode.value = 1;
+    this.mesh.visible = true;
+  }
+
+  useCells() {
+    this.material.uniforms.uMode.value = 0;
   }
 
   setRange(lo: number, hi: number) {
@@ -118,6 +154,7 @@ export class SliceLayer {
 
   /** Orient the plane: XZ is the noon-midnight meridian (contains the IMF in PGSM). */
   setPlane(plane: Plane) {
+    this.material.uniforms.uPlane.value = plane === 'XZ' ? 0 : plane === 'XY' ? 1 : 2;
     this.mesh.rotation.set(0, 0, 0);
     if (plane === 'XY') this.mesh.rotation.x = -Math.PI / 2;
     if (plane === 'YZ') this.mesh.rotation.y = Math.PI / 2;

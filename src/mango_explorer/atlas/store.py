@@ -107,8 +107,29 @@ def read_cube(root: Path, entry: dict, grid: Grid) -> CubeData:
     )
 
 
+def write_samples(root: Path, table: dict[str, np.ndarray], cube_id: str, window_s: float) -> dict:
+    """The k-NN sample table: base geometry in one file, one float32 file per quantity."""
+    base = {k: v for k, v in table.items() if not k.startswith("q:")}
+    entry = {"cube": cube_id, "window_s": window_s, "n": int(len(table["d"])),
+             "base": {"path": "samples/base.bin", "sections": _write_sections(root / "samples/base.bin", list(base.items()))},
+             "quantities": {}}
+    for k, v in table.items():
+        if k.startswith("q:"):
+            rel = f"samples/{k[2:]}.bin"
+            entry["quantities"][k[2:]] = {"path": rel, "sections": _write_sections(root / rel, [("value", v)])}
+    return entry
+
+
+def read_samples(root: Path, entry: dict) -> dict[str, np.ndarray]:
+    root = Path(root)
+    out = dict(_read_sections(root / entry["base"]["path"], entry["base"]["sections"]))
+    for q, f in entry["quantities"].items():
+        out[f"q:{q}"] = _read_sections(root / f["path"], f["sections"])["value"]
+    return out
+
+
 def write_atlas(root: Path, grid: Grid, cubes: list[CubeData], hours: dict[str, np.ndarray],
-                info: dict) -> dict:
+                info: dict, samples: dict | None = None) -> dict:
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
     manifest = {
@@ -121,6 +142,8 @@ def write_atlas(root: Path, grid: Grid, cubes: list[CubeData], hours: dict[str, 
         "cubes": [write_cube(root, c) for c in cubes],
         "js_types": _JS_TYPES,
     }
+    if samples is not None:
+        manifest["samples"] = write_samples(root, samples["table"], samples["cube"], samples["window_s"])
     (root / "manifest.json").write_text(json.dumps(manifest, indent=1))
     return manifest
 

@@ -13,6 +13,7 @@ export type Manifest = {
   stats: Record<string, number>; source: Record<string, unknown>;
   hours: FileEntry & { n_rows: number };
   cubes: CubeEntry[];
+  samples?: { cube: string; window_s: number; n: number; base: FileEntry; quantities: Record<string, FileEntry> };
 };
 export type Selection = Partial<Record<ConditionName, number[] | null>>;
 export type FetchBytes = (path: string) => Promise<ArrayBuffer>;
@@ -103,6 +104,36 @@ export class CubeView {
       n: this.sumCounts(k.n_cond_offsets, k.n_cell, k.n, conds),
       neffUpper: this.sumCounts(k.neff_cond_offsets, k.neff_cell, k.neff, conds),
     };
+  }
+}
+
+/** The k-NN sample table: rows grouped by condition bin of one cube; values in axis space. */
+export class SampleTable {
+  private values = new Map<string, Float32Array>();
+  private constructor(readonly manifest: Manifest, readonly base: Record<string, Typed>, private fetchBytes: FetchBytes) {}
+
+  static async load(manifest: Manifest, fetchBytes: FetchBytes) {
+    if (!manifest.samples) throw new Error('this atlas has no sample table (rebuild it to use k-NN)');
+    return new SampleTable(manifest, await loadSections(fetchBytes, manifest.samples.base), fetchBytes);
+  }
+
+  async quantity(q: QuantityName): Promise<Float32Array> {
+    if (!this.values.has(q))
+      this.values.set(q, (await loadSections(this.fetchBytes, this.manifest.samples!.quantities[q])).value as Float32Array);
+    return this.values.get(q)!;
+  }
+
+  /** Row indices of the samples in the selected condition bins. */
+  rows(sel: Selection): Int32Array {
+    const cube = this.manifest.cubes.find((c) => c.id === this.manifest.samples!.cube)!;
+    const off = this.base.cond_offsets;
+    const conds = selectedConditions(cube.dims, cube.shape, sel);
+    let n = 0;
+    for (const c of conds) n += off[c + 1] - off[c];
+    const out = new Int32Array(n);
+    let j = 0;
+    for (const c of conds) for (let i = off[c]; i < off[c + 1]; i++) out[j++] = i;
+    return out;
   }
 }
 

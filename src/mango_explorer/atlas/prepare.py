@@ -25,6 +25,14 @@ class Prepared:
     hist: dict[str, np.ndarray]
     cells: dict[str, np.ndarray]
     dropped: dict[str, int] = field(default_factory=dict)
+    # per-sample geometry and values, for the k-NN sample table
+    d: np.ndarray | None = None
+    theta: np.ndarray | None = None
+    phi_gsm: np.ndarray | None = None
+    clock_deg: np.ndarray | None = None
+    bx_neg: np.ndarray | None = None
+    t_ns: np.ndarray | None = None
+    values: dict[str, np.ndarray] | None = None
 
 
 def prepare(cols: dict[str, np.ndarray], grid: Grid, frames=None) -> Prepared:
@@ -32,13 +40,15 @@ def prepare(cols: dict[str, np.ndarray], grid: Grid, frames=None) -> Prepared:
     n_in = len(cols["R_norm"])
     mask = row_mask(cols)
     kept = {k: np.asarray(v)[mask] for k, v in cols.items()}
-    conds = condition_bins(condition_values(kept), grid)
+    cvals = condition_values(kept)
+    conds = condition_bins(cvals, grid)
     qvals = quantity_values(kept)
     cells = {}
     for frame in frames:
         theta, phi = normalized_angles(kept, frame)
         cells[frame] = spatial_cells(kept["R_norm"], theta, phi, grid)
     any_frame = next(iter(cells.values()))
+    theta_gsm, phi_gsm = normalized_angles(kept, "GSM")
     return Prepared(
         n_in=n_in,
         n_kept=int(mask.sum()),
@@ -50,4 +60,11 @@ def prepare(cols: dict[str, np.ndarray], grid: Grid, frames=None) -> Prepared:
             "row_filter": int(n_in - mask.sum()),
             "outside_shell_or_theta": int((any_frame < 0).sum()),
         },
+        d=np.asarray(kept["R_norm"], dtype=float),
+        theta=theta_gsm,
+        phi_gsm=phi_gsm,
+        clock_deg=cvals["clock_deg"],
+        bx_neg=np.asarray(kept["Bx_imf"], dtype=float) < 0,
+        t_ns=np.asarray(kept["Time"]).astype("datetime64[ns]").astype(np.int64),
+        values=qvals,
     )

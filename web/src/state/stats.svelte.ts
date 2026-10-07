@@ -1,5 +1,6 @@
 // Client side of the stats worker. Only the latest query's answer is kept.
-import type { ProbeReply, QueryReply, Slot, StatsReply, StatsRequest } from '../workers/protocol';
+import type { KnnProbeReply, KnnReply, ProbeReply, QueryReply, Slot, StatsReply, StatsRequest } from '../workers/protocol';
+import type { Plane } from '../core/knnField';
 import type { Selection } from '../core/atlas';
 import type { FrameName, QuantityName } from '../core/grid';
 import type { Stat } from '../core/compute';
@@ -8,7 +9,8 @@ export const PROFILE_THETA_MAX = 30;
 
 export const stats = $state<{
   pending: boolean; error: string; result: QueryReply | null; resultA: QueryReply | null; probe: ProbeReply | null;
-}>({ pending: false, error: '', result: null, resultA: null, probe: null });
+  knn: KnnReply | null; knnProbe: KnnProbeReply | null;
+}>({ pending: false, error: '', result: null, resultA: null, probe: null, knn: null, knnProbe: null });
 
 let worker: Worker | null = null;
 let nextId = 1;
@@ -50,6 +52,34 @@ export async function runQuery(frame: FrameName, quantity: QuantityName, stat: S
     stats.error = '';
   } else if (r.type === 'error') stats.error = r.message;
   if (slot === 'B' && stats.probe) probe(stats.probe.cell);
+}
+
+let latestKnn = 0;
+let knnTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** k-NN statistics; debounced because each request searches every displayed node. */
+export function runKnn(frame: FrameName, quantity: QuantityName, stat: Stat, selection: Selection,
+  plane: Plane, shell: number, k: number, cap: number) {
+  if (!worker) return;
+  const snap = $state.snapshot(selection);
+  stats.pending = true;
+  clearTimeout(knnTimer);
+  knnTimer = setTimeout(async () => {
+    const id = (latestKnn = nextId);
+    const r = await send({ type: 'knn', frame, quantity, stat, selection: snap, plane, shell, k, cap });
+    if (id !== latestKnn) return;
+    stats.pending = false;
+    if (r.type === 'knn') { stats.knn = r; stats.error = ''; }
+    else if (r.type === 'error') stats.error = r.message;
+  }, 180);
+}
+
+let latestKnnProbe = 0;
+export async function probeKnn(point: [number, number, number] | null, cell: number) {
+  if (!worker || !point) { stats.knnProbe = null; return; }
+  const id = (latestKnnProbe = nextId);
+  const r = await send({ type: 'knnProbe', point, cell });
+  if (id === latestKnnProbe && r.type === 'knnProbe') stats.knnProbe = r;
 }
 
 export async function probe(cell: number | null) {

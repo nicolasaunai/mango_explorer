@@ -18,10 +18,13 @@
     if (!r) return;
     for (let j = 0; j < nt; j++)
       for (let k = 0; k < nphi; k++) {
-        const c = (app.shell * nt + j) * nphi + k, f = r.flags[c];
+        const c = (app.shell * nt + j) * nphi + k;
+        // k-NN mode: one node per (theta, phi) on the selected shell
+        const vals = r.shell?.values ?? r.values, flags = r.shell?.flags ?? r.flags, at = r.shell ? j * nphi + k : c;
+        const f = flags[at];
         const x = k * cw, y = j * ch;
         if (f === FLAG.EMPTY) continue;
-        ctx.fillStyle = lutColor(bytes, (r.values[c] - lo) / (hi - lo));
+        ctx.fillStyle = lutColor(bytes, (vals[at] - lo) / (hi - lo));
         ctx.fillRect(x, y, cw + 0.5, ch + 0.5);
         if (f === FLAG.WEAK) {
           ctx.fillStyle = 'rgba(58,70,85,0.75)';
@@ -41,7 +44,8 @@
     const b = canvas.getBoundingClientRect();
     const k = Math.floor(((e.clientX - b.left) / b.width) * nphi), j = Math.floor(((e.clientY - b.top) / b.height) * nt);
     const cell = (app.shell * nt + j) * nphi + k;
-    if (display.shown && display.shown.flags[cell] !== FLAG.EMPTY) patch({ probe: cell });
+    const s = display.shown;
+    if (s && (s.shell ? s.shell.flags[j * nphi + k] : s.flags[cell]) !== FLAG.EMPTY) patch({ probe: cell });
   }
   const pgsm = $derived(app.frame !== 'GSM');
 </script>

@@ -22,6 +22,9 @@ def main(argv=None) -> None:
     b.add_argument("--frames", nargs="+")
     b.add_argument("--cubes", nargs="+")
     b.add_argument("--chunk-rows", type=int, default=sources.CHUNK_ROWS)
+    b.add_argument("--sample-window", type=float, metavar="SECONDS",
+                   help="k-NN sample table: keep one sample per spacecraft per window (0 = all); "
+                        "default from the grid spec")
     args = p.parse_args(argv)
 
     grid = load_grid(args.grid)
@@ -36,7 +39,8 @@ def main(argv=None) -> None:
 
         chunks = sources.iter_polars(synthetic_magnetosheath(args.synthetic), args.chunk_rows)
         source = {"kind": "synthetic", "rows": args.synthetic}
-    m = build_atlas(chunks, grid, args.out, frames=args.frames, cube_ids=args.cubes, source=source)
+    m = build_atlas(chunks, grid, args.out, frames=args.frames, cube_ids=args.cubes, source=source,
+                    sample_window_s=args.sample_window)
     print(f"atlas written to {args.out}: {m['stats']}  ({m['build_seconds']} s)")
 
 

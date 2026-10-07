@@ -116,3 +116,40 @@ describe('hour table', () => {
     expect(table.marginal('clock_deg', ref.selection).map((c) => c.neff)).toEqual(ref.clock_marginal_neff);
   });
 });
+
+describe('k-NN', () => {
+  const root = fileURLToPath(new URL('../../../golden/atlas-mini/', import.meta.url));
+  const fetchBytes: FetchBytes = async (p) => {
+    const buf = await readFile(root + p);
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+  };
+  it('reproduces the Python k-NN statistics', async () => {
+    const { SampleTable } = await import('./atlas');
+    const { SpatialHash, displayPosition, framePhi, knnAt } = await import('./knn');
+    const { jelinekBs, shueAlpha, shueMp, shueR0 } = await import('./boundaries');
+    const ref = golden.atlas_mini, kn = ref.knn;
+    const db = grid.raw.display_boundaries;
+    const r0 = shueR0(db.bz_nT, db.pd_nPa), al = shueAlpha(db.bz_nT, db.pd_nPa);
+    const b = { rMp: (t: number) => shueMp(t, r0, al), rBs: (t: number) => jelinekBs(t, db.pd_nPa) };
+    const table = await SampleTable.load(await loadManifest(fetchBytes), fetchBytes);
+    const rows = table.rows(ref.selection);
+    expect(rows.length).toBe(kn.n_samples);
+    const t = table.base, vals = await table.quantity('Np_ratio');
+    const pos = new Float64Array(rows.length * 3), v = new Float64Array(rows.length), iv = new Float64Array(rows.length);
+    rows.forEach((r, i) => {
+      const phi = framePhi('PGSM_fold', t.phi_gsm[r], t.clock_deg[r], t.bx_neg[r] === 1);
+      pos.set(displayPosition(t.d[r], t.theta[r], phi, b), 3 * i);
+      v[i] = vals[r]; iv[i] = t.interval[r];
+    });
+    const hash = new SpatialHash(pos, kn.cap);
+    kn.nodes.forEach((node, i) => {
+      const r = knnAt(hash, v, iv, node as [number, number, number], kn.k, kn.cap);
+      expect(r.n).toBe(kn.n[i]);
+      expect(r.neff).toBe(kn.neff[i]);
+      for (const key of ['median', 'q25', 'q75', 'dist_median'] as const) {
+        const want = kn[key][i], got = key === 'dist_median' ? r.distMedian : r[key];
+        if (want === null) expect(got).toBeNaN(); else close(got, want, 1e-6, 1e-6);
+      }
+    });
+  });
+});

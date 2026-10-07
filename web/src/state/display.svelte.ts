@@ -4,17 +4,22 @@ import { stats } from './stats.svelte';
 import { difference, symmetricRange } from '../core/compare';
 import { isLogScale } from '../core/compute';
 import type { LutName } from '../render/lut';
+import { FIELD_HALF, FIELD_N } from '../core/knnField';
 
 export type Shown = {
   mode: 'A' | 'B' | 'diff';
   values: Float32Array; flags: Uint8Array; range: [number, number];
   lut: LutName; log: boolean; diverging: boolean;
+  /** k-NN mode: values are a field on the slice plane; the shell map has its own arrays */
+  field?: { n: number; half: number };
+  shell?: { values: Float32Array; flags: Uint8Array };
 };
 
 class Display {
   /** Differences only make sense for value statistics, not for counts. */
-  readonly canDiff = $derived(app.stat !== 'n' && app.stat !== 'neff');
-  readonly mode = $derived<'A' | 'B' | 'diff'>(!app.pinA ? 'B' : app.cmp === 'diff' && !this.canDiff ? 'B' : app.cmp);
+  readonly canDiff = $derived(app.stat !== 'n' && app.stat !== 'neff' && app.source === 'bins');
+  /** A/B comparison works on the binned statistics only (for now). */
+  readonly mode = $derived<'A' | 'B' | 'diff'>(!app.pinA || app.source === 'knn' ? 'B' : app.cmp === 'diff' && !this.canDiff ? 'B' : app.cmp);
   readonly diff = $derived.by(() => {
     const a = stats.resultA, b = stats.result;
     if (this.mode !== 'diff' || !a || !b) return null;
@@ -22,6 +27,12 @@ class Display {
   });
   readonly shown = $derived.by<Shown | null>(() => {
     const log = isLogScale(app.quantity, app.stat);
+    if (app.source === 'knn') {
+      const r = stats.knn;
+      if (!r) return null;
+      return { mode: 'B', values: r.field, flags: r.fieldFlags, range: app.range ?? r.range, lut: app.lut, log, diverging: false,
+        field: { n: FIELD_N, half: FIELD_HALF }, shell: { values: r.shellValues, flags: r.shellFlags } };
+    }
     if (this.mode === 'diff') {
       const d = this.diff;
       if (!d) return null;

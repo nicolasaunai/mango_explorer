@@ -79,8 +79,10 @@ export class SceneView {
     });
   }
 
-  setSlice(p: { values: Float32Array; flags: Uint8Array; range: [number, number]; lut: LutName; plane: Plane; visible: boolean }) {
-    this.slice.setData(p.values, p.flags);
+  setSlice(p: { values: Float32Array; flags: Uint8Array; range: [number, number]; lut: LutName; plane: Plane; visible: boolean;
+    field?: { n: number; half: number } }) {
+    if (p.field) this.slice.setField(p.values, p.flags, p.field.n, p.field.half);
+    else this.slice.setData(p.values, p.flags);
     this.slice.setRange(p.range[0], p.range[1]);
     this.slice.setLut(p.lut);
     this.slice.setPlane(p.plane);

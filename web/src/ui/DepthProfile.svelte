@@ -7,8 +7,9 @@
   import { richText } from './format';
 
   const W = 300, H = 110, L = 38, R = 8, T = 8, B = 18;
-  const profile = $derived((stats.result?.profile ?? []).filter((p) => p.n > 0));
-  const profileA = $derived(app.pinA ? (stats.resultA?.profile ?? []).filter((p) => p.n > 0) : []);
+  const knn = $derived(app.source === 'knn');
+  const profile = $derived(((knn ? stats.knn?.profile : stats.result?.profile) ?? []).filter((p) => p.n > 0));
+  const profileA = $derived(app.pinA && !knn ? (stats.resultA?.profile ?? []).filter((p) => p.n > 0) : []);
   const log = $derived(grid.isLog(app.quantity));
   const yr = $derived.by(() => {
     const v = [...profile, ...profileA].flatMap((p) => [p.q25, p.q75]).filter(Number.isFinite);
@@ -27,7 +28,7 @@
 </script>
 
 <div class="view">
-  <div class="head"><span class="eyebrow">Depth profile · θ &lt; {PROFILE_THETA_MAX}°</span><span class="muted small">{@html richText(grid.raw.quantities[app.quantity].label)}</span></div>
+  <div class="head"><span class="eyebrow">Depth profile · {knn ? 'Sun–Earth line, k-NN' : `θ < ${PROFILE_THETA_MAX}°`}</span><span class="muted small">{@html richText(grid.raw.quantities[app.quantity].label)}</span></div>
   <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Median and interquartile range against depth between magnetopause and bow shock">
     {#each yt as t (t)}
       <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} class="grid" />

@@ -226,5 +226,20 @@
     "C3",
     "MMS",
     "DS1"
-  ]
+  ],
+  "display_boundaries": {
+    "magnetopause": "shue98",
+    "bow_shock": "jelinek12",
+    "pd_nPa": 2.0,
+    "bz_nT": 0.0,
+    "note": "Shapes the explorer draws, and between which k-NN samples are placed by their (D_msh, theta, phi). Illustrative until the MANGO boundary models are available."
+  },
+  "knn": {
+    "k": 50,
+    "cap_re": 2.0,
+    "search_factor": 2.0,
+    "min_neff": 5,
+    "sample_window_s": 60,
+    "definition": "k nearest samples (Euclidean, R_E, in the displayed sheath of the chosen frame); NaN when the distance of the ceil(k/2)-th nearest exceeds cap_re. Only neighbours within search_factor*cap_re are searched. Quantiles use linear interpolation of the neighbours' values in axis space. The sample table keeps the first sample of each (spacecraft, sample_window_s) window; 0 keeps all."
+  }
 }

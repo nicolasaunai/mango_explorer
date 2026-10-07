@@ -3,7 +3,7 @@
   import { SceneView, type CameraPreset } from '../render/scene';
   import { app, patch } from '../state/app.svelte';
   import { data } from '../state/data.svelte';
-  import { probe, stats } from '../state/stats.svelte';
+  import { probe, probeKnn, stats } from '../state/stats.svelte';
   import { BOUNDARIES, BOUNDARY_NOTE } from '../state/boundaries';
   import { VIEWS, clockUndefined } from '../state/schema';
   import { grid } from '../core/grid';
@@ -56,13 +56,15 @@
   $effect(() => {
     const d = display.shown;
     if (!view || !d) return;
-    view.setSlice({ values: d.values, flags: d.flags, range: d.range, lut: d.lut, plane: app.plane, visible: app.layers.includes('slice') });
+    view.setSlice({ values: d.values, flags: d.flags, range: d.range, lut: d.lut, plane: app.plane, visible: app.layers.includes('slice'), field: d.field });
   });
   const setCmp = (cmp: 'A' | 'B' | 'diff') => patch({ cmp, range: null });
   $effect(() => {
     const cell = app.probe;
-    view?.setMarker(cell >= 0 ? cellCenter(cell, BOUNDARIES) : null);
-    if (stats.result) probe(cell >= 0 ? cell : null);
+    const center = cell >= 0 ? cellCenter(cell, BOUNDARIES) : null;
+    view?.setMarker(center);
+    if (app.source === 'knn') { if (stats.knn) probeKnn(center, cell); }
+    else if (stats.result) probe(cell >= 0 ? cell : null);
   });
 
   const fmt = new Intl.NumberFormat('en-US');

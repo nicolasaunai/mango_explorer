@@ -1,7 +1,7 @@
 {
  "format": "mango-atlas/1",
  "grid": "grid-v1",
- "created": "2026-10-07T07:01:54+00:00",
+ "created": "2026-10-07T07:59:36+00:00",
  "source": {
   "kind": "synthetic"
  },
@@ -409,5 +409,147 @@
   "uint16": "Uint16Array",
   "uint8": "Uint8Array",
   "float32": "Float32Array"
+ },
+ "samples": {
+  "cube": "clock-cone-Ma",
+  "window_s": 60,
+  "n": 2228,
+  "base": {
+   "path": "samples/base.bin",
+   "sections": [
+    {
+     "name": "cond_offsets",
+     "dtype": "uint32",
+     "length": 361,
+     "offset": 0
+    },
+    {
+     "name": "d",
+     "dtype": "float32",
+     "length": 2228,
+     "offset": 1444
+    },
+    {
+     "name": "theta",
+     "dtype": "float32",
+     "length": 2228,
+     "offset": 10356
+    },
+    {
+     "name": "phi_gsm",
+     "dtype": "float32",
+     "length": 2228,
+     "offset": 19268
+    },
+    {
+     "name": "clock_deg",
+     "dtype": "float32",
+     "length": 2228,
+     "offset": 28180
+    },
+    {
+     "name": "interval",
+     "dtype": "uint32",
+     "length": 2228,
+     "offset": 37092
+    },
+    {
+     "name": "bx_neg",
+     "dtype": "uint8",
+     "length": 2228,
+     "offset": 46004
+    }
+   ]
+  },
+  "quantities": {
+   "Np": {
+    "path": "samples/Np.bin",
+    "sections": [
+     {
+      "name": "value",
+      "dtype": "float32",
+      "length": 2228,
+      "offset": 0
+     }
+    ]
+   },
+   "Tp": {
+    "path": "samples/Tp.bin",
+    "sections": [
+     {
+      "name": "value",
+      "dtype": "float32",
+      "length": 2228,
+      "offset": 0
+     }
+    ]
+   },
+   "B": {
+    "path": "samples/B.bin",
+    "sections": [
+     {
+      "name": "value",
+      "dtype": "float32",
+      "length": 2228,
+      "offset": 0
+     }
+    ]
+   },
+   "V": {
+    "path": "samples/V.bin",
+    "sections": [
+     {
+      "name": "value",
+      "dtype": "float32",
+      "length": 2228,
+      "offset": 0
+     }
+    ]
+   },
+   "Np_ratio": {
+    "path": "samples/Np_ratio.bin",
+    "sections": [
+     {
+      "name": "value",
+      "dtype": "float32",
+      "length": 2228,
+      "offset": 0
+     }
+    ]
+   },
+   "B_ratio": {
+    "path": "samples/B_ratio.bin",
+    "sections": [
+     {
+      "name": "value",
+      "dtype": "float32",
+      "length": 2228,
+      "offset": 0
+     }
+    ]
+   },
+   "Tp_ratio": {
+    "path": "samples/Tp_ratio.bin",
+    "sections": [
+     {
+      "name": "value",
+      "dtype": "float32",
+      "length": 2228,
+      "offset": 0
+     }
+    ]
+   },
+   "V_ratio": {
+    "path": "samples/V_ratio.bin",
+    "sections": [
+     {
+      "name": "value",
+      "dtype": "float32",
+      "length": 2228,
+      "offset": 0
+     }
+    ]
+   }
+  }
  }
 }

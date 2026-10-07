@@ -36,6 +36,23 @@
   </div>
 
   <div class="ctl">
+    <span class="eyebrow">Statistics from</span>
+    <div class="seg">
+      <button type="button" aria-pressed={app.source === 'bins'} onclick={() => patch({ source: 'bins', range: null })}>Bins</button>
+      <button type="button" aria-pressed={app.source === 'knn'} onclick={() => patch({ source: 'knn', range: null })}>k-NN</button>
+    </div>
+    {#if app.source === 'knn'}
+      <label class="num"><span>k neighbours</span>
+        <input type="range" min="5" max="200" step="1" value={app.k} onchange={(e) => patch({ k: Number((e.currentTarget as HTMLInputElement).value) })} />
+        <span class="mono">{app.k}</span></label>
+      <label class="num"><span>cap (R<sub>E</sub>)</span>
+        <input type="range" min="0.25" max="6" step="0.25" value={app.cap} onchange={(e) => patch({ cap: Number((e.currentTarget as HTMLInputElement).value) })} />
+        <span class="mono">{app.cap}</span></label>
+      <p class="na">Empty where the median distance of the k nearest samples exceeds the cap; hatched where they come from fewer than {grid.raw.knn.min_neff} spacecraft-hours. A/B compare uses bins.</p>
+    {/if}
+  </div>
+
+  <div class="ctl">
     <span class="eyebrow">Statistic</span>
     <div class="chips">
       {#each STATS as s (s)}
@@ -76,4 +93,6 @@
   .small { font-size: 11px; }
   .na { margin: 6px 0 0; font-size: 11.5px; color: var(--muted); }
   .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .num { display: grid; grid-template-columns: 1fr 1.4fr 2.6em; gap: 6px; align-items: center; font-size: 12px; }
+  .num input { accent-color: var(--mp); min-width: 0; }
 </style>

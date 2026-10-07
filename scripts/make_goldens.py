@@ -17,7 +17,8 @@ from mango_explorer.atlas.grid import load_grid
 from mango_explorer.atlas.pipeline import build_atlas
 from mango_explorer.atlas.sources import iter_polars
 from mango_explorer.atlas.stats import hist_quantile
-from mango_explorer.atlas.store import read_atlas
+from mango_explorer.atlas.knn import display_positions, frame_phi_deg, knn_stats
+from mango_explorer.atlas.store import read_atlas, read_samples
 from mango_explorer.atlas.synthetic import synthetic_magnetosheath
 
 ROOT = Path(__file__).resolve().parents[1] / "golden"
@@ -78,13 +79,38 @@ def binning():
     }
 
 
+def knn_golden(root, manifest, sel):
+    t = read_samples(root, manifest["samples"])
+    conds = cubes_selected(manifest, sel)
+    off = t["cond_offsets"].astype(np.int64)
+    rows = np.concatenate([np.arange(off[c], off[c + 1]) for c in conds])
+    phi = frame_phi_deg("PGSM_fold", t["phi_gsm"][rows], t["clock_deg"][rows], t["bx_neg"][rows])
+    pos = display_positions(t["d"][rows], t["theta"][rows], phi, G)
+    rng = np.random.default_rng(9)
+    nodes = pos[rng.choice(len(pos), 12, replace=False)] + rng.normal(0, 0.5, (12, 3))
+    nodes = np.concatenate([nodes, [[0.0, 40.0, 0.0]]])   # far outside: NaN
+    k, cap = 20, 2.0
+    r = knn_stats(nodes, pos, t["q:Np_ratio"][rows], t["interval"][rows], k, cap)
+    nan = lambda a: [None if not np.isfinite(v) else round(float(v), 12) for v in a]  # noqa: E731
+    return {"k": k, "cap": cap, "nodes": lst(nodes), "median": nan(r["median"]), "q25": nan(r["q25"]),
+            "q75": nan(r["q75"]), "n": r["n"].tolist(), "neff": r["neff"].tolist(),
+            "dist_median": nan(r["dist_median"]), "n_samples": int(len(rows))}
+
+
+def cubes_selected(manifest, sel):
+    entry = manifest["cubes"][0]
+    axes = [sel.get(d, list(range(n))) for d, n in zip(entry["dims"], entry["shape"])]
+    import itertools
+    return [int(np.ravel_multi_index(c, entry["shape"])) for c in itertools.product(*axes)]
+
+
 def atlas_mini():
     out = ROOT / "atlas-mini"
     shutil.rmtree(out, ignore_errors=True)
     df = synthetic_magnetosheath(30_000, seed=5)
     build_atlas(iter_polars(df), G, out, frames=["PGSM_fold"], source={"kind": "synthetic"},
                 log=lambda *_: None)
-    _, cubes, hours = read_atlas(out)
+    manifest, cubes, hours = read_atlas(out)
     sel = {"clock_deg": [11, 0, 1, 2], "cone_deg": [2, 3, 4]}
     q = cubes[0].query(sel)
     med = hist_quantile(q["hist"]["Np_ratio"], G.hist_axis_edges("Np_ratio"), 0.5)
@@ -93,7 +119,8 @@ def atlas_mini():
     keys = hours["sc"].astype(np.int64) << 40 | hours["interval"].astype(np.int64)
     clock_neff = [len(np.unique(keys[np.isin(hours["cone_deg"], sel["cone_deg"])
                                           & (hours["clock_deg"] == k)])) for k in range(12)]
-    return {"selection": sel, "frame": "PGSM_fold", "quantity": "Np_ratio",
+    knn = knn_golden(out, manifest, sel)
+    return {"selection": sel, "frame": "PGSM_fold", "quantity": "Np_ratio", "knn": knn,
             "hours_n": int(hours["n"][in_sel].sum()), "hours_neff": len(np.unique(keys[in_sel])),
             "clock_marginal_neff": clock_neff,
             "cells": nz.tolist(), "n": q["n"][nz].tolist(),
