@@ -18,6 +18,10 @@
     if (data.status !== 'ready') return;
     runQuery(app.frame, app.quantity, app.stat, selectionOf(app));
   });
+  $effect(() => {
+    if (data.status !== 'ready' || !app.pinA) return;
+    runQuery(app.frame, app.quantity, app.stat, selectionOf(app.pinA), 'A');
+  });
 
   let tab = $state<'cond' | 'qty' | 'views'>('cond');
   const pgsm = $derived(app.frame !== 'GSM');

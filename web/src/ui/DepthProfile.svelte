@@ -8,9 +8,10 @@
 
   const W = 300, H = 110, L = 38, R = 8, T = 8, B = 18;
   const profile = $derived((stats.result?.profile ?? []).filter((p) => p.n > 0));
+  const profileA = $derived(app.pinA ? (stats.resultA?.profile ?? []).filter((p) => p.n > 0) : []);
   const log = $derived(grid.isLog(app.quantity));
   const yr = $derived.by(() => {
-    const v = profile.flatMap((p) => [p.q25, p.q75]).filter(Number.isFinite);
+    const v = [...profile, ...profileA].flatMap((p) => [p.q25, p.q75]).filter(Number.isFinite);
     if (!v.length) return [0, 1] as [number, number];
     const lo = Math.min(...v), hi = Math.max(...v), pad = (hi - lo) * 0.08 || 0.1;
     return [lo - pad, hi + pad] as [number, number];
@@ -22,6 +23,7 @@
     ? `M${profile.map((p) => `${x(mid(p))},${y(p.q75)}`).join('L')}L${[...profile].reverse().map((p) => `${x(mid(p))},${y(p.q25)}`).join('L')}Z` : '');
   const line = $derived(profile.length ? `M${profile.map((p) => `${x(mid(p))},${y(p.q50)}`).join('L')}` : '');
   const yt = $derived(ticks(yr[0], yr[1], log, 4));
+  const lineA = $derived(profileA.length ? `M${profileA.map((p) => `${x(mid(p))},${y(p.q50)}`).join('L')}` : '');
 </script>
 
 <div class="view">
@@ -33,6 +35,7 @@
     {/each}
     <path d={band} class="band" />
     <path d={line} class="line" />
+    {#if lineA}<path d={lineA} class="lineA" /><text x={W - R} y={T + 8} text-anchor="end" class="leg">— B   - - A</text>{/if}
     {#each profile as p (p.d0)}<circle cx={x(mid(p))} cy={y(p.q50)} r="2" class="dot" />{/each}
     <text x={x(0)} y={H - 4} class="mp">MP 0</text>
     <text x={x(1)} y={H - 4} text-anchor="end" class="bs">1 BS</text>
@@ -50,6 +53,8 @@
   .band { fill: var(--mp); fill-opacity: 0.18; }
   .line { fill: none; stroke: var(--mp); stroke-width: 1.6; }
   .dot { fill: var(--mp); }
+  .lineA { fill: none; stroke: var(--bs); stroke-width: 1.4; stroke-dasharray: 4 3; }
+  .leg { fill: var(--muted); }
   .mp { fill: var(--mp); }
   .bs { fill: var(--bs); }
 </style>

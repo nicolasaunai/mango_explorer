@@ -25,4 +25,4 @@ export async function loadAtlas(base = new URL('atlas/', document.baseURI).href)
   }
 }
 
-export const selectionOf = (s: ViewState): Selection => ({ clock_deg: s.clock, cone_deg: s.cone, Ma_sw: s.ma });
+export const selectionOf = (s: Pick<ViewState, 'clock' | 'cone' | 'ma'>): Selection => ({ clock_deg: s.clock, cone_deg: s.cone, Ma_sw: s.ma });

@@ -28,6 +28,8 @@ export const ViewState = z.object({
   shell: z.number().int().min(0).max(grid.spatialShape[0] - 1),
   probe: z.number().int().min(-1).max(grid.nCells - 1),
   range: z.tuple([z.number(), z.number()]).nullable(),
+  pinA: z.object({ clock: bins(N_CLOCK), cone: bins(N_CONE), ma: bins(N_MA) }).nullable(),
+  cmp: z.enum(['A', 'B', 'diff']),
 });
 export type ViewState = z.infer<typeof ViewState>;
 
@@ -46,6 +48,8 @@ export const DEFAULT_STATE: ViewState = {
   shell: 5,
   probe: -1,
   range: null,
+  pinA: null,
+  cmp: 'B',
 };
 
 export const PRESETS: { id: string; label: string; hint: string; state: Partial<ViewState> }[] = [
@@ -67,6 +71,7 @@ export function encodeHash(s: ViewState): string {
   });
   if (s.probe >= 0) p.set('pr', String(s.probe));
   if (s.range) p.set('cr', s.range.map((x) => +x.toPrecision(5)).join('~'));
+  if (s.pinA) { p.set('pa', [s.pinA.clock, s.pinA.cone, s.pinA.ma].map(list).join('~')); p.set('cmp', s.cmp); }
   return '#' + p.toString();
 }
 
@@ -82,6 +87,8 @@ export function decodeHash(hash: string): ViewState {
     shell: p.has('sh') ? Number(p.get('sh')) : undefined,
     probe: p.has('pr') ? Number(p.get('pr')) : undefined,
     range: p.has('cr') ? p.get('cr')!.split('~').map(Number) : undefined,
+    pinA: p.has('pa') ? (([clock, cone, ma]) => ({ clock: unlist(clock), cone: unlist(cone), ma: unlist(ma) }))(p.get('pa')!.split('~')) : undefined,
+    cmp: p.get('cmp') ?? undefined,
   };
   const out = { ...DEFAULT_STATE } as Record<string, unknown>;
   for (const [k, v] of Object.entries(candidate)) {

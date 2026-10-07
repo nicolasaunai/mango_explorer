@@ -1,7 +1,7 @@
 {
  "format": "mango-atlas/1",
  "grid": "grid-v1",
- "created": "2026-10-07T06:32:00+00:00",
+ "created": "2026-10-07T07:01:54+00:00",
  "source": {
   "kind": "synthetic"
  },
@@ -358,6 +358,46 @@
       "dtype": "uint16",
       "length": 177,
       "offset": 4658
+     }
+    ]
+   },
+   "spacecraft": {
+    "path": "cubes/clock-cone-Ma/PGSM_fold/spacecraft.bin",
+    "names": [
+     "THA",
+     "THB",
+     "THC",
+     "THD",
+     "THE",
+     "C1",
+     "C3",
+     "MMS",
+     "DS1"
+    ],
+    "sections": [
+     {
+      "name": "cond_offsets",
+      "dtype": "uint32",
+      "length": 361,
+      "offset": 0
+     },
+     {
+      "name": "n",
+      "dtype": "uint32",
+      "length": 177,
+      "offset": 1444
+     },
+     {
+      "name": "cell",
+      "dtype": "uint16",
+      "length": 177,
+      "offset": 2152
+     },
+     {
+      "name": "sc",
+      "dtype": "uint8",
+      "length": 177,
+      "offset": 2506
      }
     ]
    }

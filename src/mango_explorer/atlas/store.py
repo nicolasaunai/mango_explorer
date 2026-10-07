@@ -68,6 +68,17 @@ def write_cube(root: Path, cube: CubeData) -> dict:
         ("neff_cond_offsets", e_off), ("neff", cube.neff[1].astype(np.uint32)),
         ("neff_cell", e_cell),
     ])}
+    n_sc = len(g.spacecraft)
+    keys, counts = cube.by_sc
+    cc = keys // n_sc
+    rel = base / "spacecraft.bin"
+    entry["spacecraft"] = {"path": rel.as_posix(), "names": list(g.spacecraft),
+                           "sections": _write_sections(root / rel, [
+        ("cond_offsets", np.searchsorted(cc // nc, np.arange(ncond + 1)).astype(np.uint32)),
+        ("n", counts.astype(np.uint32)),
+        ("cell", (cc % nc).astype(np.uint16)),
+        ("sc", (keys % n_sc).astype(np.uint8)),
+    ])}
     return entry
 
 
@@ -84,10 +95,15 @@ def read_cube(root: Path, entry: dict, grid: Grid) -> CubeData:
         cc = keys_from(s["cond_offsets"], s["cell"])
         hist[q] = (cc * nb + s["hbin"].astype(np.int64), s["count"].astype(np.int64))
     s = _read_sections(root / entry["counts"]["path"], entry["counts"]["sections"])
+    sc = _read_sections(root / entry["spacecraft"]["path"], entry["spacecraft"]["sections"])
+    n_sc = len(grid.spacecraft)
+    by_sc = (keys_from(sc["cond_offsets"], sc["cell"]) * n_sc + sc["sc"].astype(np.int64),
+             sc["n"].astype(np.int64))
     return CubeData(
         grid=grid, cube_id=entry["id"], frame=entry["frame"], hist=hist,
         samples=(keys_from(s["n_cond_offsets"], s["n_cell"]), s["n"].astype(np.int64)),
         neff=(keys_from(s["neff_cond_offsets"], s["neff_cell"]), s["neff"].astype(np.int64)),
+        by_sc=by_sc,
     )
 
 

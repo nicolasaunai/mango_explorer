@@ -35,6 +35,7 @@ class CubeData:
     hist: dict[str, tuple[np.ndarray, np.ndarray]]   # quantity -> (sorted keys, counts)
     samples: tuple[np.ndarray, np.ndarray]            # (cond*n_cells+cell, n)
     neff: tuple[np.ndarray, np.ndarray]               # (cond*n_cells+cell, distinct intervals)
+    by_sc: tuple[np.ndarray, np.ndarray]              # ((cond*n_cells+cell)*n_sc+sc, n)
 
     @property
     def dims(self) -> tuple[str, ...]:
@@ -68,6 +69,12 @@ class CubeData:
             dense = np.zeros(nc * nb, dtype=np.int64)
             np.add.at(dense, keys[ok] % (nc * nb), counts[ok])
             out["hist"][q] = dense.reshape(nc, nb)
+        n_sc = len(g.spacecraft)
+        keys, values = self.by_sc
+        ok = np.isin(keys // (nc * n_sc), conds)
+        dense = np.zeros(nc * n_sc, dtype=np.int64)
+        np.add.at(dense, keys[ok] % (nc * n_sc), values[ok])
+        out["n_by_sc"] = dense.reshape(nc, n_sc)
         for name, (keys, values) in (("n", self.samples), ("neff_upper", self.neff)):
             ok = np.isin(keys // nc, conds)
             dense = np.zeros(nc, dtype=np.int64)
@@ -85,6 +92,7 @@ class CubeAccumulator:
         self.shape = grid.cube_shape(cube_id)
         self._hist = {q: ([], []) for q in grid.quantity_names}
         self._samples = ([], [])
+        self._by_sc = ([], [])
         self._pairs: list[np.ndarray] = []
 
     def add(self, prep: Prepared) -> None:
@@ -96,6 +104,10 @@ class CubeAccumulator:
         u, c = np.unique(cc[ok], return_counts=True)
         self._samples[0].append(u)
         self._samples[1].append(c)
+        n_sc = len(self.grid.spacecraft)
+        u, c = np.unique(cc[ok] * n_sc + (prep.interval[ok] >> 40), return_counts=True)
+        self._by_sc[0].append(u)
+        self._by_sc[1].append(c)
         pairs = np.stack([cc[ok], prep.interval[ok]], axis=1)
         self._pairs.append(np.unique(pairs, axis=0) if len(pairs) else pairs)
         for q, hb in prep.hist.items():
@@ -114,5 +126,6 @@ class CubeAccumulator:
             frame=self.frame,
             hist={q: _merge(*parts) for q, parts in self._hist.items()},
             samples=_merge(*self._samples),
+            by_sc=_merge(*self._by_sc),
             neff=(neff_keys.astype(np.int64), neff.astype(np.int64)),
         )

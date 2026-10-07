@@ -93,6 +93,8 @@ describe('atlas reader', () => {
       expect(res.neffUpper[cell]).toBe(ref.neff_upper[i]);
       close(histQuantile(res.hist, edges, 0.5, cell * grid.nHist, grid.nHist), ref.median_axis[i]);
     });
+    const bySc = await cube.spacecraftCounts(ref.cells[0], ref.selection);
+    expect(bySc.reduce((a, b) => a + b, 0)).toBe(ref.n[0]);
     const nonzero = Array.from(res.n).filter((x) => x > 0).length;
     expect(nonzero).toBe(ref.cells.length);
   });

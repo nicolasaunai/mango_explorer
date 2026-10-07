@@ -1,7 +1,7 @@
 """Write web/src/render/luts.json: 256-entry RGB colormaps for the explorer.
 
-Sources: batlow, grayC (Crameri, Scientific colour maps, 10.5281/zenodo.1243862, via cmcrameri);
-viridis, cividis (matplotlib). Run: .venv/bin/python scripts/make_luts.py
+Sources: batlow, grayC, vik (Crameri, Scientific colour maps, 10.5281/zenodo.1243862, via cmcrameri);
+viridis, cividis, RdBu_r (matplotlib). Run: .venv/bin/python scripts/make_luts.py
 """
 from __future__ import annotations
 
@@ -17,6 +17,8 @@ MAPS = {
     "viridis": matplotlib.colormaps["viridis"],
     "cividis": matplotlib.colormaps["cividis"],
     "grayC": ccm.grayC,
+    "vik": ccm.vik,
+    "RdBu_r": matplotlib.colormaps["RdBu_r"],
 }
 
 out = {}

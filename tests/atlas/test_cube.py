@@ -108,3 +108,25 @@ def test_atlas_round_trip(tmp_path, df, cubes):
         np.testing.assert_array_equal(a["neff_upper"], b["neff_upper"])
     assert int(hours["n"].sum()) == manifest["stats"]["rows_kept"] - \
         manifest["stats"]["dropped_outside_shell_or_theta"]
+
+
+def test_spacecraft_counts_sum_to_n(cubes):
+    q = cubes["PGSM"].query({"cone_deg": [2, 3]})
+    np.testing.assert_array_equal(q["n_by_sc"].sum(axis=1), q["n"])
+
+
+def test_cell_statistics_matches_the_cube(df, cubes):
+    from mango_explorer.atlas import cell_statistics
+    from mango_explorer.atlas.stats import hist_quantile
+
+    sel = {"clock_deg": [0, 1, 2, 3], "cone_deg": [2, 3, 4]}
+    cells = cell_statistics(df, "PGSM_fold", "Np_ratio", sel)
+    q = cubes["PGSM_fold"].query(sel)
+    idx = cells["cell"].to_numpy()
+    np.testing.assert_array_equal(cells["n"].to_numpy(), q["n"][idx])
+    assert np.all(cells["neff"].to_numpy() <= q["neff_upper"][idx])
+    med = 10 ** hist_quantile(q["hist"]["Np_ratio"][idx], G.hist_axis_edges("Np_ratio"), 0.5)
+    np.testing.assert_allclose(cells["median"].to_numpy(), med, rtol=1e-12)
+    # histogram medians stay within one bin of the exact medians (log bin width ~0.05 dex)
+    ratio = np.log10(cells["median"].to_numpy() / cells["median_exact"].to_numpy())
+    assert np.nanmax(np.abs(ratio)) < (np.log10(20) - np.log10(0.05)) / 48

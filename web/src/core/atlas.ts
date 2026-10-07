@@ -6,6 +6,7 @@ type FileEntry = { path: string; sections: Section[] };
 export type CubeEntry = {
   id: string; frame: FrameName; dims: ConditionName[]; shape: number[];
   quantities: Record<string, FileEntry>; counts: FileEntry;
+  spacecraft?: FileEntry & { names: string[] };
 };
 export type Manifest = {
   format: string; grid: string; created: string;
@@ -71,6 +72,20 @@ export class CubeView {
   private sumCounts(offsets: Typed, cell: Typed, values: Typed, conds: number[]): Uint32Array {
     const out = new Uint32Array(this.grid.nCells);
     for (const c of conds) for (let i = offsets[c]; i < offsets[c + 1]; i++) out[cell[i]] += values[i];
+    return out;
+  }
+
+  private sc: Record<string, Typed> | null = null;
+
+  /** Samples per spacecraft in one cell for the selected condition bins (names in entry.spacecraft). */
+  async spacecraftCounts(cell: number, sel: Selection): Promise<number[]> {
+    const f = this.entry.spacecraft;
+    if (!f) return [];
+    this.sc ??= await loadSections(this.fetchBytes, f);
+    const { cond_offsets, cell: cells, sc, n } = this.sc;
+    const out = new Array(f.names.length).fill(0);
+    for (const c of selectedConditions(this.entry.dims, this.entry.shape, sel))
+      for (let i = cond_offsets[c]; i < cond_offsets[c + 1]; i++) if (cells[i] === cell) out[sc[i]] += n[i];
     return out;
   }
 

@@ -4,6 +4,7 @@
   import { app, patch } from '../state/app.svelte';
   import { data, selectionOf } from '../state/data.svelte';
   import { PRESETS, clockUndefined } from '../state/schema';
+  import { conditionSummary } from './format';
   import { grid, type ConditionName } from '../core/grid';
 
   const labelsOf = (name: ConditionName) => {
@@ -50,6 +51,19 @@
     <BinBar labels={maLabels} selected={app.ma} availability={maAvail} ariaLabel="Alfvén Mach number bins" onchange={(ma) => patch({ ma })} />
   </div>
 
+  <div class="pin">
+    {#if app.pinA}
+      <div class="achip"><span class="tagA">A</span><span class="mono small">{conditionSummary({ ...app.pinA, frame: app.frame }).split(' · ').slice(1).join(' · ')}</span></div>
+      <div class="row2">
+        <button type="button" class="chip" onclick={() => patch({ pinA: { clock: [...app.clock], cone: [...app.cone], ma: [...app.ma] } })}>re-pin current as A</button>
+        <button type="button" class="chip" onclick={() => patch({ pinA: null, cmp: 'B', range: null })}>unpin</button>
+      </div>
+      <p class="note">The controls now set B. Switch between A, B and B / A above the view.</p>
+    {:else}
+      <button type="button" class="chip" onclick={() => patch({ pinA: { clock: [...app.clock], cone: [...app.cone], ma: [...app.ma] }, cmp: 'B' })} title="Freeze these conditions as A, then change the controls to define B">Pin as A to compare</button>
+    {/if}
+  </div>
+
   <footer class:weak>
     {#if data.status === 'ready' && totals}
       <div><span class="big mono">{fmt.format(totals.neff)}</span> <span class="muted">spacecraft-hours (N<sub>eff</sub>)</span></div>
@@ -73,4 +87,9 @@
   .big { font-size: 20px; color: var(--fg); }
   .weak .big { color: var(--approx); }
   .warn { color: var(--approx); }
+  .pin { display: grid; gap: 6px; }
+  .achip { display: flex; gap: 8px; align-items: baseline; }
+  .tagA { font: 600 11px var(--f-mono); color: var(--bg); background: var(--bs); border-radius: 3px; padding: 1px 6px; }
+  .row2 { display: flex; gap: 6px; flex-wrap: wrap; }
+  .small { font-size: 11px; }
 </style>

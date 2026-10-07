@@ -1,20 +1,19 @@
 <script lang="ts">
   // The statistic on one D_msh shell, unrolled: azimuth phi across, angle from the Sun-Earth line down.
   import { app, patch } from '../state/app.svelte';
-  import { stats } from '../state/stats.svelte';
+  import { display } from '../state/display.svelte';
   import { FLAG } from '../core/compute';
   import { grid } from '../core/grid';
   import { lutBytes, lutColor } from '../render/lut';
 
   const [nd, nt, nphi] = grid.spatialShape;
   let canvas: HTMLCanvasElement;
-  const range = $derived(app.range ?? stats.result?.range ?? [0, 1]);
 
   $effect(() => {
-    const r = stats.result, ctx = canvas?.getContext('2d');
+    const r = display.shown, ctx = canvas?.getContext('2d');
     if (!ctx) return;
     const W = canvas.width, H = canvas.height, cw = W / nphi, ch = H / nt;
-    const bytes = lutBytes(app.lut), [lo, hi] = range;
+    const bytes = lutBytes(r?.lut ?? app.lut), [lo, hi] = r?.range ?? [0, 1];
     ctx.clearRect(0, 0, W, H);
     if (!r) return;
     for (let j = 0; j < nt; j++)
@@ -42,7 +41,7 @@
     const b = canvas.getBoundingClientRect();
     const k = Math.floor(((e.clientX - b.left) / b.width) * nphi), j = Math.floor(((e.clientY - b.top) / b.height) * nt);
     const cell = (app.shell * nt + j) * nphi + k;
-    if (stats.result && stats.result.flags[cell] !== FLAG.EMPTY) patch({ probe: cell });
+    if (display.shown && display.shown.flags[cell] !== FLAG.EMPTY) patch({ probe: cell });
   }
   const pgsm = $derived(app.frame !== 'GSM');
 </script>

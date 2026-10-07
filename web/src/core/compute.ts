@@ -49,6 +49,15 @@ export function cellValues(res: QueryResult, q: QuantityName, stat: Stat, g: Gri
   return out;
 }
 
+/** Robust spread per cell in colour space: IQR / 1.349 (a Gaussian sigma), NaN where empty. */
+export function cellSpread(res: QueryResult, q: QuantityName, g: Grid = defaultGrid): Float32Array {
+  const nc = g.nCells, nb = g.nHist, edges = g.histAxisEdges(q);
+  const out = new Float32Array(nc).fill(NaN);
+  for (let c = 0; c < nc; c++)
+    if (res.n[c] > 0) out[c] = (quantileAxis(res.hist, c, edges, nb, 0.75) - quantileAxis(res.hist, c, edges, nb, 0.25)) / 1.349;
+  return out;
+}
+
 /** 2nd–98th percentile of the reliable cells, the default colour range. */
 export function robustRange(values: Float32Array, flags: Uint8Array, lo = 0.02, hi = 0.98): [number, number] {
   let v = Array.from(values).filter((x, i) => flags[i] === FLAG.OK && Number.isFinite(x));

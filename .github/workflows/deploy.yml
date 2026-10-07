@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
-      - run: pip install -e . polars pyarrow
+      - run: pip install -e ".[atlas]"
       # The public site ships a synthetic atlas until the data policy for a real one is settled;
       # the app labels it "synthetic data" in its header.
       - run: python -m mango_explorer.atlas build --synthetic 400000 --out web/public/atlas

@@ -2,6 +2,7 @@
   import { app, patch, toggleLayer } from '../state/app.svelte';
   import { grid, type QuantityName } from '../core/grid';
   import { PLANES, STATS } from '../state/schema';
+  import CopyPython from './CopyPython.svelte';
 
   const q = grid.raw.quantities;
   const groups: { title: string; items: QuantityName[] }[] = [
@@ -62,6 +63,7 @@
       <span>Shock tinted by θ<sub>Bn</sub>{#if !fold}<span class="muted small"> (needs fold)</span>{/if}</span></label>
     <label class="opt"><input type="checkbox" checked={app.layers.includes('shells')} onchange={() => toggleLayer('shells')} /><span>D<sub>msh</sub> = 0.5 shell</span></label>
   </div>
+  <CopyPython />
 </section>
 
 <style>
