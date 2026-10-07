@@ -4,14 +4,14 @@ import { stats } from './stats.svelte';
 import { difference, symmetricRange } from '../core/compare';
 import { isLogScale } from '../core/compute';
 import type { LutName } from '../render/lut';
-import { FIELD_HALF, FIELD_N } from '../core/knnField';
+import { FIELD_HALF, FIELD_N, type PlaneField } from '../core/knnField';
 
 export type Shown = {
   mode: 'A' | 'B' | 'diff';
   values: Float32Array; flags: Uint8Array; range: [number, number];
   lut: LutName; log: boolean; diverging: boolean;
   /** k-NN mode: values are a field on the slice plane; the shell map has its own arrays */
-  field?: { n: number; half: number };
+  field?: { n: number; half: number; planes: PlaneField[] };
   shell?: { values: Float32Array; flags: Uint8Array };
 };
 
@@ -30,8 +30,8 @@ class Display {
     if (app.source === 'knn') {
       const r = stats.knn;
       if (!r) return null;
-      return { mode: 'B', values: r.field, flags: r.fieldFlags, range: app.range ?? r.range, lut: app.lut, log, diverging: false,
-        field: { n: FIELD_N, half: FIELD_HALF }, shell: { values: r.shellValues, flags: r.shellFlags } };
+      return { mode: 'B', values: r.shellValues, flags: r.shellFlags, range: app.range ?? r.range, lut: app.lut, log, diverging: false,
+        field: { n: FIELD_N, half: FIELD_HALF, planes: r.fields }, shell: { values: r.shellValues, flags: r.shellFlags } };
     }
     if (this.mode === 'diff') {
       const d = this.diff;

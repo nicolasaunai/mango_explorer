@@ -3,6 +3,7 @@
   import { grid, type QuantityName } from '../core/grid';
   import { PLANES, STATS } from '../state/schema';
   import CopyPython from './CopyPython.svelte';
+  import { stats } from '../state/stats.svelte';
 
   const q = grid.raw.quantities;
   const groups: { title: string; items: QuantityName[] }[] = [
@@ -43,8 +44,10 @@
     </div>
     {#if app.source === 'knn'}
       <label class="num"><span>k neighbours</span>
-        <input type="range" min="5" max="200" step="1" value={app.k} onchange={(e) => patch({ k: Number((e.currentTarget as HTMLInputElement).value) })} />
-        <span class="mono">{app.k}</span></label>
+        <input id="knn-k" type="number" min="1" step="1" value={app.k} class="mono"
+          onchange={(e) => { const v = Math.round(Number((e.currentTarget as HTMLInputElement).value)); if (v >= 1) patch({ k: v }); }} />
+        <span class="muted small">full data</span></label>
+      {#if stats.knn}<p class="na">Searching {stats.knn.kSearched.toLocaleString('en-US')} neighbours among the {Math.round(stats.knn.fraction * 100)} % random sample held by the browser ({stats.knn.nSamples.toLocaleString('en-US')} samples selected) · {Math.round(stats.knn.ms)} ms.</p>{/if}
       <label class="num"><span>cap (R<sub>E</sub>)</span>
         <input type="range" min="0.25" max="6" step="0.25" value={app.cap} onchange={(e) => patch({ cap: Number((e.currentTarget as HTMLInputElement).value) })} />
         <span class="mono">{app.cap}</span></label>
@@ -62,10 +65,11 @@
   </div>
 
   <div class="ctl">
-    <span class="eyebrow">Slice plane</span>
-    <div class="seg">
+    <span class="eyebrow">Slice planes</span>
+    <div class="seg" role="group" aria-label="Slice planes, any combination">
       {#each PLANES as pl (pl)}
-        <button type="button" aria-pressed={app.plane === pl} onclick={() => patch({ plane: pl })}>{pl}</button>
+        <button type="button" aria-pressed={app.planes.includes(pl)}
+          onclick={() => patch({ planes: app.planes.includes(pl) ? app.planes.filter((x) => x !== pl) : [...app.planes, pl] })}>{pl}</button>
       {/each}
     </div>
   </div>
@@ -97,4 +101,5 @@
   .chips { display: flex; flex-wrap: wrap; gap: 4px; }
   .num { display: grid; grid-template-columns: 1fr 1.4fr 2.6em; gap: 6px; align-items: center; font-size: 12px; }
   .num input { accent-color: var(--mp); min-width: 0; }
+  .num input[type='number'] { font-size: 12px; padding: 3px 6px; border: 1px solid var(--rule); border-radius: 4px; background: var(--panel); color: var(--fg); }
 </style>

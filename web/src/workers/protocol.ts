@@ -1,7 +1,7 @@
 import type { Manifest, Selection } from '../core/atlas';
 import type { FrameName, QuantityName } from '../core/grid';
 import type { ProfilePoint, Stat } from '../core/compute';
-import type { Plane } from '../core/knnField';
+import type { Plane, PlaneField } from '../core/knnField';
 import type { KnnResult } from '../core/knn';
 
 export type StatsRequest =
@@ -9,7 +9,7 @@ export type StatsRequest =
   | { type: 'query'; id: number; slot: Slot; frame: FrameName; quantity: QuantityName; stat: Stat; selection: Selection; profileThetaMax: number; useNeff: boolean }
   | { type: 'probe'; id: number; cell: number }
   | { type: 'knn'; id: number; frame: FrameName; quantity: QuantityName; stat: Stat; selection: Selection;
-      plane: Plane; shell: number; k: number; cap: number; useNeff: boolean }
+      planes: Plane[]; shell: number; k: number; cap: number; useNeff: boolean }
   | { type: 'knnProbe'; id: number; point: [number, number, number]; cell: number };
 
 export type Slot = 'A' | 'B';
@@ -24,11 +24,13 @@ export type ProbeReply = {
   spacecraft: { name: string; n: number }[];
 };
 export type KnnReply = {
-  type: 'knn'; id: number; frame: FrameName; quantity: QuantityName; stat: Stat; plane: Plane; shell: number;
-  field: Float32Array; fieldFlags: Uint8Array; shellValues: Float32Array; shellFlags: Uint8Array;
+  type: 'knn'; id: number; frame: FrameName; quantity: QuantityName; stat: Stat; shell: number;
+  fields: PlaneField[]; shellValues: Float32Array; shellFlags: Uint8Array;
   profile: ProfilePoint[]; range: [number, number]; nSamples: number; ms: number;
+  /** k as requested (neighbours in the full dataset) and as searched in the random sample */
+  k: number; kSearched: number; fraction: number;
 };
-export type KnnProbeReply = { type: 'knnProbe'; id: number; cell: number; quantity: QuantityName; result: KnnResult; values: number[] };
+export type KnnProbeReply = { type: 'knnProbe'; id: number; cell: number; quantity: QuantityName; result: KnnResult; values: number[]; k: number; kSearched: number };
 export type StatsReply =
   | { type: 'ready'; id: number; manifest: Manifest }
   | KnnReply

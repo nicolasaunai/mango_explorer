@@ -15,7 +15,7 @@ export type Manifest = {
   encoding?: 'gzip';
   hours: FileEntry & { n_rows: number };
   cubes: CubeEntry[];
-  samples?: { cube: string; window_s: number; n: number; base: FileEntry; quantities: Record<string, FileEntry> };
+  samples?: { cube: string; fraction: number; n: number; base: FileEntry; quantities: Record<string, FileEntry> };
 };
 export type Selection = Partial<Record<ConditionName, number[] | null>>;
 export type FetchBytes = (path: string) => Promise<ArrayBuffer>;

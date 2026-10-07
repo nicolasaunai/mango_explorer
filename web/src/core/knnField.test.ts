@@ -14,17 +14,20 @@ describe('k-NN field', () => {
   const n = pts.length / 3;
   const s = { hash: new SpatialHash(Float64Array.from(pts), 2), values: new Float64Array(n).fill(Math.log10(2)),
     intervals: Float64Array.from({ length: n }, (_, i) => i % 50), n };
-  const out = knnField(s, 'Np_ratio', 'median', 'XZ', 5, b, { k: 20, cap: 2, factor: 2, minNeff: 5, useNeff: true });
+  const out = knnField(s, 'Np_ratio', 'median', ['XZ', 'YZ'], 5, b, { k: 20, cap: 2, factor: 2, minNeff: 5, useNeff: true });
 
   it('fills the dayside sheath and leaves the unsampled flanks NaN', () => {
     const at = (x: number, z: number) => {
       const i = Math.floor(((x + FIELD_HALF) / (2 * FIELD_HALF)) * FIELD_N), j = Math.floor(((z + FIELD_HALF) / (2 * FIELD_HALF)) * FIELD_N);
-      return { v: out.field[j * FIELD_N + i], f: out.fieldFlags[j * FIELD_N + i] };
+      return { v: out.fields[0].values[j * FIELD_N + i], f: out.fields[0].flags[j * FIELD_N + i] };
     };
     const nose = (b.rMp(0) + b.rBs(0)) / 2;
     expect(at(nose, 0).v).toBeCloseTo(Math.log10(2), 6);
     expect(at(nose, 0).f).toBe(FLAG.OK);
     expect(at(-10, 25).f).toBe(FLAG.EMPTY);
+  });
+  it('computes one field per requested plane', () => {
+    expect(out.fields.map((f) => f.plane)).toEqual(['XZ', 'YZ']);
   });
   it('profile runs from the magnetopause to the bow shock', () => {
     expect(out.profile).toHaveLength(20);

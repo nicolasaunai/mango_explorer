@@ -59,14 +59,14 @@ let knnTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** k-NN statistics; debounced because each request searches every displayed node. */
 export function runKnn(frame: FrameName, quantity: QuantityName, stat: Stat, selection: Selection,
-  plane: Plane, shell: number, k: number, cap: number, useNeff: boolean) {
+  planes: Plane[], shell: number, k: number, cap: number, useNeff: boolean) {
   if (!worker) return;
   const snap = $state.snapshot(selection);
   stats.pending = true;
   clearTimeout(knnTimer);
   knnTimer = setTimeout(async () => {
     const id = (latestKnn = nextId);
-    const r = await send({ type: 'knn', frame, quantity, stat, selection: snap, plane, shell, k, cap, useNeff });
+    const r = await send({ type: 'knn', frame, quantity, stat, selection: snap, planes: [...planes], shell, k, cap, useNeff });
     if (id !== latestKnn) return;
     stats.pending = false;
     if (r.type === 'knn') { stats.knn = r; stats.error = ''; }

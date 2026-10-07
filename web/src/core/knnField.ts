@@ -7,7 +7,7 @@ import { FLAG, type ProfilePoint, type Stat, isLogScale } from './compute';
 import { SpatialHash, framePosition, knnAt, positionAt, type KnnResult } from './knn';
 
 export type Plane = 'XY' | 'XZ' | 'YZ';
-export const FIELD_N = 192;
+export const FIELD_N = 128; // 0.5 R_E on a 64 R_E plane
 export const FIELD_HALF = 32; // the plane spans [-32, 32] R_E on both axes
 
 /** Physics position of plane coordinates (u, v); must match the slice shader. */
@@ -27,7 +27,7 @@ export function buildSamples(table: SampleTable, values: Float32Array, frame: Fr
     pos.set(framePosition(frame, t.x[r], t.y[r], t.z[r], t.clock_deg[r], t.bx_neg[r] === 1), 3 * i);
     v[i] = values[r]; iv[i] = t.interval[r];
   });
-  return { hash: new SpatialHash(pos, cap), values: v, intervals: iv, n: rows.length };
+  return { hash: new SpatialHash(pos, cap / 2), values: v, intervals: iv, n: rows.length };
 }
 
 /** Colour-space value of a k-NN result for a statistic (values are in axis space). */
@@ -51,23 +51,28 @@ export function knnFlag(r: KnnResult, minNeff: number, useNeff: boolean): number
 
 export type KnnOptions = { k: number; cap: number; factor: number; minNeff: number; useNeff: boolean };
 
-export function knnField(s: KnnSamples, q: QuantityName, stat: Stat, plane: Plane, shell: number,
+export type PlaneField = { plane: Plane; values: Float32Array; flags: Uint8Array };
+
+export function knnField(s: KnnSamples, q: QuantityName, stat: Stat, planes: Plane[], shell: number,
   b: Boundaries, o: KnnOptions, g: Grid = defaultGrid) {
   const at = (p: [number, number, number]) => knnAt(s.hash, s.values, s.intervals, p, o.k, o.cap, o.factor);
   const thetaMax = g.thetaEdges[g.thetaEdges.length - 1];
 
-  // slice plane: nodes inside the displayed sheath only
-  const field = new Float32Array(FIELD_N * FIELD_N).fill(NaN), fieldFlags = new Uint8Array(FIELD_N * FIELD_N);
+  // slice planes: nodes inside the displayed sheath only
   const step = (2 * FIELD_HALF) / FIELD_N;
-  for (let j = 0; j < FIELD_N; j++)
-    for (let i = 0; i < FIELD_N; i++) {
-      const p = planePoint(plane, -FIELD_HALF + (i + 0.5) * step, -FIELD_HALF + (j + 0.5) * step);
-      const { d, thetaDeg } = normalizedCoords(p, b);
-      if (!(d >= 0 && d <= 1) || thetaDeg >= thetaMax) continue;
-      const r = at(p);
-      field[j * FIELD_N + i] = knnValue(r, q, stat, g);
-      fieldFlags[j * FIELD_N + i] = knnFlag(r, o.minNeff, o.useNeff);
-    }
+  const fields: PlaneField[] = planes.map((plane) => {
+    const values = new Float32Array(FIELD_N * FIELD_N).fill(NaN), flags = new Uint8Array(FIELD_N * FIELD_N);
+    for (let j = 0; j < FIELD_N; j++)
+      for (let i = 0; i < FIELD_N; i++) {
+        const p = planePoint(plane, -FIELD_HALF + (i + 0.5) * step, -FIELD_HALF + (j + 0.5) * step);
+        const { d, thetaDeg } = normalizedCoords(p, b);
+        if (!(d >= 0 && d <= 1) || thetaDeg >= thetaMax) continue;
+        const r = at(p);
+        values[j * FIELD_N + i] = knnValue(r, q, stat, g);
+        flags[j * FIELD_N + i] = knnFlag(r, o.minNeff, o.useNeff);
+      }
+    return { plane, values, flags };
+  });
 
   // shell map: one node per (theta, phi) bin centre on the middle of the selected shell
   const [, nt, nphi] = g.spatialShape;
@@ -89,5 +94,5 @@ export function knnField(s: KnnSamples, q: QuantityName, stat: Stat, plane: Plan
     const r = at(positionAt((d0 + d1) / 2, 0, 0, b));
     profile.push({ d0, d1, q25: r.q25, q50: r.median, q75: r.q75, n: Number.isFinite(r.median) ? r.n : 0 });
   }
-  return { field, fieldFlags, shellValues, shellFlags, profile, log: isLogScale(q, stat, g) };
+  return { fields, shellValues, shellFlags, profile, log: isLogScale(q, stat, g) };
 }

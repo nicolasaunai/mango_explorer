@@ -228,12 +228,12 @@
     "DS1"
   ],
   "knn": {
-    "k": 50,
+    "k": 7000,
     "cap_re": 2.0,
     "search_factor": 2.0,
     "min_neff": 5,
     "sample_fraction": 0.1,
-    "definition": "k nearest samples (Euclidean, R_E) among the normalized positions rotated into the chosen frame; NaN when the distance of the ceil(k/2)-th nearest exceeds cap_re. Only neighbours within search_factor*cap_re are searched. Quantiles use linear interpolation of the neighbours' values in axis space. The sample table keeps a deterministic random fraction (sample_fraction) of the samples; time plays no role."
+    "definition": "k is counted in neighbours of the full dataset (default 7000, as in the MANGO statistical studies). Tools holding a random fraction f of the samples search round(k*f) neighbours, which covers the same neighbourhood. Neighbours are the nearest samples (Euclidean, R_E) among the normalized positions rotated into the chosen frame; NaN when the distance of the ceil(k/2)-th nearest exceeds cap_re. Only neighbours within search_factor*cap_re are searched. Quantiles use linear interpolation of the neighbours' values in axis space. The sample table keeps a deterministic random fraction (sample_fraction) of the samples; time plays no role."
   },
   "reference_boundaries": {
     "kind": "paraboloid",

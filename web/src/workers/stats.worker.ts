@@ -14,7 +14,11 @@ const cubes = new Map<FrameName, Promise<CubeView>>();
 let last: { quantity: QuantityName; res: QueryResult; frame: FrameName; selection: Selection } | null = null;
 
 let samples: Promise<SampleTable> | null = null;
-let knnCache: { key: string; s: KnnSamples; k: number; cap: number } | null = null;
+let knnCache: { key: string; s: KnnSamples; k: number; kSearched: number; cap: number } | null = null;
+
+/** k is given in neighbours of the full dataset; the browser holds a random fraction of it, so the
+ * same neighbourhood holds about k x fraction of its samples. */
+const searchedK = (k: number) => Math.max(1, Math.round(k * (manifest.samples?.fraction ?? 1)));
 const KNN = grid.raw.knn;
 
 const post = (msg: StatsReply, transfer: Transferable[] = []) => (self as unknown as Worker).postMessage(msg, transfer);
@@ -54,24 +58,28 @@ self.onmessage = async (e: MessageEvent<StatsRequest>) => {
       const key = JSON.stringify([m.frame, m.quantity, m.selection, m.cap]);
       if (knnCache?.key !== key) {
         const values = await table.quantity(m.quantity);
-        knnCache = { key, s: buildSamples(table, values, m.frame, m.selection, m.cap), k: m.k, cap: m.cap };
+        knnCache = { key, s: buildSamples(table, values, m.frame, m.selection, m.cap), k: m.k, kSearched: 0, cap: m.cap };
       }
-      knnCache.k = m.k;
-      const opts = { k: m.k, cap: m.cap, factor: KNN.search_factor, minNeff: KNN.min_neff, useNeff: m.useNeff };
-      const f = knnField(knnCache.s, m.quantity, m.stat, m.plane, m.shell, DISPLAY_BOUNDARIES, opts);
-      const all = new Float32Array([...f.field, ...f.shellValues]), flags = new Uint8Array([...f.fieldFlags, ...f.shellFlags]);
+      const kSearched = searchedK(m.k);
+      knnCache.k = m.k; knnCache.kSearched = kSearched;
+      const opts = { k: kSearched, cap: m.cap, factor: KNN.search_factor, minNeff: KNN.min_neff, useNeff: m.useNeff };
+      const f = knnField(knnCache.s, m.quantity, m.stat, m.planes, m.shell, DISPLAY_BOUNDARIES, opts);
+      const all = new Float32Array([...f.fields.flatMap((p) => [...p.values]), ...f.shellValues]);
+      const flags = new Uint8Array([...f.fields.flatMap((p) => [...p.flags]), ...f.shellFlags]);
       post({
-        type: 'knn', id: m.id, frame: m.frame, quantity: m.quantity, stat: m.stat, plane: m.plane, shell: m.shell,
-        field: f.field, fieldFlags: f.fieldFlags, shellValues: f.shellValues, shellFlags: f.shellFlags,
+        type: 'knn', id: m.id, frame: m.frame, quantity: m.quantity, stat: m.stat, shell: m.shell,
+        fields: f.fields, shellValues: f.shellValues, shellFlags: f.shellFlags,
         profile: f.profile, range: range2(all, flags), nSamples: knnCache.s.n, ms: performance.now() - t0,
-      }, [f.field.buffer, f.fieldFlags.buffer, f.shellValues.buffer, f.shellFlags.buffer]);
+        k: m.k, kSearched, fraction: manifest.samples?.fraction ?? 1,
+      }, [...f.fields.flatMap((p) => [p.values.buffer, p.flags.buffer]), f.shellValues.buffer, f.shellFlags.buffer]);
     } else if (m.type === 'knnProbe') {
       if (!knnCache) throw new Error('no k-NN query yet');
-      const { s, k, cap } = knnCache;
+      const { s, k, kSearched, cap } = knnCache;
       const { knnAt } = await import('../core/knn');
-      const result = knnAt(s.hash, s.values, s.intervals, m.point, k, cap, KNN.search_factor);
-      const near = s.hash.nearest(m.point[0], m.point[1], m.point[2], k, KNN.search_factor * cap);
-      post({ type: 'knnProbe', id: m.id, cell: m.cell, quantity: JSON.parse(knnCache.key)[1], result, values: near.idx.map((i) => s.values[i]) });
+      const result = knnAt(s.hash, s.values, s.intervals, m.point, kSearched, cap, KNN.search_factor);
+      const near = s.hash.kNearest(m.point[0], m.point[1], m.point[2], kSearched, KNN.search_factor * cap);
+      post({ type: 'knnProbe', id: m.id, cell: m.cell, quantity: JSON.parse(knnCache.key)[1], result,
+        values: near.idx.map((i) => s.values[i]), k, kSearched });
     } else if (m.type === 'probe') {
       if (!last) throw new Error('no query yet');
       const nb = grid.nHist, { res, quantity } = last;

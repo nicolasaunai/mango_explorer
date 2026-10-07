@@ -39,7 +39,7 @@
     </header>
     <div class="where mono">D {b.d[0].toFixed(1)}–{b.d[1].toFixed(1)} · θ {b.theta[0]}–{b.theta[1]}° · φ {b.phi[0]}–{b.phi[1]}°</div>
     {#if knn && kp}
-      <div class="mono muted">{kp.result.n} neighbours · median distance {Number.isFinite(kp.result.distMedian) ? kp.result.distMedian.toFixed(2) : '—'} R<sub>E</sub> (cap {app.cap})</div>
+      <div class="mono muted">{kp.result.n} of {kp.kSearched} searched (k = {kp.k.toLocaleString('en-US')} full data) · median distance {Number.isFinite(kp.result.distMedian) ? kp.result.distMedian.toFixed(2) : '—'} R<sub>E</sub> (cap {app.cap})</div>
     {/if}
     {#if p && p.n > 0 && Number.isFinite(p.q50)}
       <div class="val"><span class="big mono">{formatValue(phys(p.q50))}</span>

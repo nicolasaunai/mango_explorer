@@ -56,7 +56,7 @@
   $effect(() => {
     const d = display.shown;
     if (!view || !d) return;
-    view.setSlice({ values: d.values, flags: d.flags, range: d.range, lut: d.lut, plane: app.plane, visible: app.layers.includes('slice'), field: d.field });
+    view.setSlices({ planes: app.planes, values: d.values, flags: d.flags, range: d.range, lut: d.lut, visible: app.layers.includes('slice'), field: d.field });
   });
   const setCmp = (cmp: 'A' | 'B' | 'diff') => patch({ cmp, range: null });
   $effect(() => {

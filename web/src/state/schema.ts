@@ -21,7 +21,7 @@ export const ViewState = z.object({
   ma: bins(N_MA),
   quantity: z.enum(grid.quantityNames as [QuantityName, ...QuantityName[]]),
   stat: z.enum(STATS),
-  plane: z.enum(PLANES),
+  planes: z.array(z.enum(PLANES)),
   view: z.enum(VIEWS),
   layers: z.array(z.enum(LAYERS)),
   lut: z.enum(LUT_NAMES as [LutName, ...LutName[]]),
@@ -31,7 +31,7 @@ export const ViewState = z.object({
   pinA: z.object({ clock: bins(N_CLOCK), cone: bins(N_CONE), ma: bins(N_MA) }).nullable(),
   cmp: z.enum(['A', 'B', 'diff']),
   source: z.enum(['bins', 'knn']),
-  k: z.number().int().min(5).max(500),
+  k: z.number().int().min(1),
   cap: z.number().min(0.25).max(10),
   neff: z.boolean(),
 });
@@ -45,7 +45,7 @@ export const DEFAULT_STATE: ViewState = {
   ma: [2, 3],
   quantity: 'Np_ratio',
   stat: 'median',
-  plane: 'XZ',
+  planes: ['XZ'],
   view: 'iso',
   layers: ['mp', 'bs', 'tint', 'slice'],
   lut: 'batlow',
@@ -74,7 +74,7 @@ const unlist = (s: string | null) => (s ? s.split('.').filter(Boolean).map(Numbe
 export function encodeHash(s: ViewState): string {
   const p = new URLSearchParams({
     f: s.frame, clk: list(s.clock), cone: list(s.cone), ma: list(s.ma),
-    q: s.quantity, st: s.stat, pl: s.plane, v: s.view, ly: s.layers.join('.'),
+    q: s.quantity, st: s.stat, pl: s.planes.join('.'), v: s.view, ly: s.layers.join('.'),
     cm: s.lut, sh: String(s.shell),
   });
   if (s.probe >= 0) p.set('pr', String(s.probe));
@@ -91,7 +91,7 @@ export function decodeHash(hash: string): ViewState {
   const candidate = {
     frame: p.get('f') ?? undefined, clock: unlist(p.get('clk')), cone: unlist(p.get('cone')),
     ma: unlist(p.get('ma')), quantity: p.get('q') ?? undefined, stat: p.get('st') ?? undefined,
-    plane: p.get('pl') ?? undefined, view: p.get('v') ?? undefined,
+    planes: p.has('pl') ? (p.get('pl') || '').split('.').filter(Boolean) : undefined, view: p.get('v') ?? undefined,
     layers: p.has('ly') ? (p.get('ly') || '').split('.').filter(Boolean) : undefined,
     lut: p.get('cm') ?? undefined,
     shell: p.has('sh') ? Number(p.get('sh')) : undefined,

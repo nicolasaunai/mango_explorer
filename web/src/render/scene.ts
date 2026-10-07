@@ -41,7 +41,7 @@ export class SceneView {
   private ro: ResizeObserver;
   private frameRequested = false;
   private lastShape?: [RadiusFn, RadiusFn];
-  readonly slice = new SliceLayer();
+  readonly slices: Record<Plane, SliceLayer> = { XY: new SliceLayer(), XZ: new SliceLayer(), YZ: new SliceLayer() };
   private marker = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 12), new THREE.MeshBasicMaterial({ color: PALETTE.fg }));
   private raycaster = new THREE.Raycaster();
   /** Called with the physics position (X, Y, Z) of a click on the slice. */
@@ -61,7 +61,11 @@ export class SceneView {
     this.setView('iso');
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(canvas.parentElement!);
-    this.scene.add(this.slice.mesh, this.marker);
+    for (const [plane, s] of Object.entries(this.slices) as [Plane, SliceLayer][]) {
+      s.setPlane(plane);
+      this.scene.add(s.mesh);
+    }
+    this.scene.add(this.marker);
     this.marker.visible = false;
     this.listenForPicks();
   }
@@ -74,19 +78,27 @@ export class SceneView {
       const r = this.canvas.getBoundingClientRect();
       const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       this.raycaster.setFromCamera(ndc, this.camera);
-      const hit = this.slice.mesh.visible ? this.raycaster.intersectObject(this.slice.mesh)[0] : undefined;
+      const meshes = Object.values(this.slices).map((s) => s.mesh).filter((m) => m.visible);
+      const hit = this.raycaster.intersectObjects(meshes, false)[0];
       if (hit) this.onPick?.([hit.point.x, -hit.point.z, hit.point.y]);
     });
   }
 
-  setSlice(p: { values: Float32Array; flags: Uint8Array; range: [number, number]; lut: LutName; plane: Plane; visible: boolean;
-    field?: { n: number; half: number } }) {
-    if (p.field) this.slice.setField(p.values, p.flags, p.field.n, p.field.half);
-    else this.slice.setData(p.values, p.flags);
-    this.slice.setRange(p.range[0], p.range[1]);
-    this.slice.setLut(p.lut);
-    this.slice.setPlane(p.plane);
-    this.slice.mesh.visible = p.visible;
+  /** Show the statistic on each requested plane: grid cells (bins) or a field per plane (k-NN). */
+  setSlices(p: { planes: Plane[]; values: Float32Array; flags: Uint8Array; range: [number, number]; lut: LutName; visible: boolean;
+    field?: { n: number; half: number; planes: { plane: Plane; values: Float32Array; flags: Uint8Array }[] } }) {
+    for (const [plane, s] of Object.entries(this.slices) as [Plane, SliceLayer][]) {
+      const on = p.visible && p.planes.includes(plane);
+      if (on) {
+        const f = p.field?.planes.find((x) => x.plane === plane);
+        if (p.field && !f) { s.mesh.visible = false; continue; }  // field not computed yet
+        if (f) s.setField(f.values, f.flags, p.field!.n, p.field!.half);
+        else s.setData(p.values, p.flags);
+        s.setRange(p.range[0], p.range[1]);
+        s.setLut(p.lut);
+      }
+      s.mesh.visible = on;
+    }
     this.requestRender();
   }
 
@@ -169,7 +181,7 @@ export class SceneView {
       grp.userData.geo = geo;
       return grp;
     };
-    this.slice.setBoundaries(rMp, rBs);
+    for (const s of Object.values(this.slices)) s.setBoundaries(rMp, rBs);
     this.mp = make(rMp, this.mpMat, PALETTE.mp, 0.2, 1);
     this.bs = make(rBs, this.bsMat, PALETTE.bs, 0.15, 2);
     this.scene.add(this.mp, this.bs);

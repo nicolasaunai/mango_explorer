@@ -79,6 +79,64 @@ export class SpatialHash {
     return { idx: top.map((j) => this.ix[j]), dist: top.map((j) => Math.sqrt(this.d2[j])) };
   }
 
+  /** Collect candidates within radius into the internal buffers; returns their count. */
+  private collect(x: number, y: number, z: number, radius: number): number {
+    const [nx, ny, nz] = this.dims, c = this.cell, r2 = radius * radius;
+    const fx = (x - this.min[0]) / c, fy = (y - this.min[1]) / c, fz = (z - this.min[2]) / c, s = radius / c;
+    const x0 = Math.max(0, Math.floor(fx - s)), x1 = Math.min(nx - 1, Math.floor(fx + s));
+    const y0 = Math.max(0, Math.floor(fy - s)), y1 = Math.min(ny - 1, Math.floor(fy + s));
+    const z0 = Math.max(0, Math.floor(fz - s)), z1 = Math.min(nz - 1, Math.floor(fz + s));
+    const p = this.pos;
+    let m = 0;
+    for (let iz = z0; iz <= z1; iz++)
+      for (let iy = y0; iy <= y1; iy++)
+        for (let ix = x0; ix <= x1; ix++) {
+          const cell = (iz * ny + iy) * nx + ix;
+          for (let j = this.start[cell]; j < this.start[cell + 1]; j++) {
+            const i = this.order[j], dx = p[3 * i] - x, dy = p[3 * i + 1] - y, dz = p[3 * i + 2] - z;
+            const d2 = dx * dx + dy * dy + dz * dz;
+            if (d2 > r2) continue;
+            if (m === this.d2.length) this.grow();
+            this.d2[m] = d2; this.ix[m] = i; m++;
+          }
+        }
+    return m;
+  }
+
+  /**
+   * Allocation-free k-NN reduction: leaves the indices of the (at most k) nearest points in
+   * `this.ix[0..n)` and returns n and the squared distance of the `rank`-th nearest (1-based),
+   * searching a growing radius up to maxRadius.
+   */
+  selectNearest(x: number, y: number, z: number, k: number, maxRadius: number, rank: number): { n: number; d2Rank: number } {
+    let m = 0;
+    for (let r = maxRadius / 8; ; r = Math.min(2 * r, maxRadius)) {
+      m = this.collect(x, y, z, r);
+      if (m >= k || r >= maxRadius) break;
+    }
+    const n = Math.min(k, m);
+    if (m > k) this.select(m, k);
+    if (rank < 1 || rank > n) return { n, d2Rank: NaN };
+    // the rank-th smallest among the first n: select within [0, n)
+    this.select(n, rank);
+    let best = -1;
+    for (let j = 0; j < rank; j++) if (this.d2[j] > best) best = this.d2[j];
+    return { n, d2Rank: best };
+  }
+
+  neighbourIndex(j: number): number {
+    return this.ix[j];
+  }
+
+  /** The k nearest within maxRadius, searching a growing radius so dense regions stay cheap.
+   * Exact: once at least k points lie within the current radius, they include the k nearest. */
+  kNearest(x: number, y: number, z: number, k: number, maxRadius: number, startRadius = maxRadius / 8) {
+    for (let r = Math.min(startRadius, maxRadius); ; r = Math.min(2 * r, maxRadius)) {
+      const res = this.nearest(x, y, z, k, r);
+      if (res.idx.length >= k || r >= maxRadius) return res;
+    }
+  }
+
   private grow() {
     const d2 = new Float64Array(this.d2.length * 2), ix = new Int32Array(this.ix.length * 2);
     d2.set(this.d2); ix.set(this.ix);
@@ -106,9 +164,11 @@ export class SpatialHash {
   }
 }
 
+let valueBuf = new Float64Array(4096);
+
 export type KnnResult = { q25: number; median: number; q75: number; n: number; neff: number; distMedian: number };
 
-const quantile = (sorted: number[], q: number) => {
+const quantile = (sorted: ArrayLike<number>, q: number) => {
   const pos = q * (sorted.length - 1), lo = Math.floor(pos), hi = Math.ceil(pos);
   return sorted[lo] + (pos - lo) * (sorted[hi] - sorted[lo]);
 };
@@ -116,16 +176,17 @@ const quantile = (sorted: number[], q: number) => {
 /** Statistics of the k nearest samples of one node (see the module comment for the NaN rule). */
 export function knnAt(hash: SpatialHash, values: ArrayLike<number>, intervals: ArrayLike<number>,
   node: [number, number, number], k: number, cap: number, factor = 2): KnnResult {
-  // k points within the cap are the k nearest overall; widen the search only when needed
-  let { idx, dist } = hash.nearest(node[0], node[1], node[2], k, cap);
-  if (idx.length < k && factor > 1) ({ idx, dist } = hash.nearest(node[0], node[1], node[2], k, factor * cap));
   const half = Math.ceil(k / 2);
-  const out: KnnResult = { q25: NaN, median: NaN, q75: NaN, n: idx.length, neff: 0, distMedian: NaN };
-  if (idx.length < half) return out;
-  out.distMedian = dist[half - 1];
-  out.neff = new Set(idx.map((i) => intervals[i])).size;
+  const { n, d2Rank } = hash.selectNearest(node[0], node[1], node[2], k, factor * cap, half);
+  const out: KnnResult = { q25: NaN, median: NaN, q75: NaN, n, neff: 0, distMedian: NaN };
+  if (n < half) return out;
+  out.distMedian = Math.sqrt(d2Rank);
+  if (n > valueBuf.length) valueBuf = new Float64Array(2 * n);
+  const seen = new Set<number>();
+  for (let j = 0; j < n; j++) { const i = hash.neighbourIndex(j); valueBuf[j] = values[i]; seen.add(intervals[i]); }
+  out.neff = seen.size;
   if (out.distMedian > cap) return out;
-  const v = idx.map((i) => values[i]).sort((a, b) => a - b);
+  const v = valueBuf.subarray(0, n).sort();
   out.q25 = quantile(v, 0.25); out.median = quantile(v, 0.5); out.q75 = quantile(v, 0.75);
   return out;
 }
