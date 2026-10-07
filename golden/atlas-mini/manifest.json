@@ -1,0 +1,373 @@
+{
+ "format": "mango-atlas/1",
+ "grid": "grid-v1",
+ "created": "2026-10-07T06:32:00+00:00",
+ "source": {
+  "kind": "synthetic"
+ },
+ "stats": {
+  "rows_in": 29520,
+  "rows_kept": 29432,
+  "dropped_row_filter": 88,
+  "dropped_outside_shell_or_theta": 2824
+ },
+ "build_seconds": 0.06,
+ "hours": {
+  "path": "hours.bin",
+  "n_rows": 41,
+  "sections": [
+   {
+    "name": "interval",
+    "dtype": "int32",
+    "length": 41,
+    "offset": 0
+   },
+   {
+    "name": "n",
+    "dtype": "uint32",
+    "length": 41,
+    "offset": 164
+   },
+   {
+    "name": "sc",
+    "dtype": "uint8",
+    "length": 41,
+    "offset": 328
+   },
+   {
+    "name": "V_sw",
+    "dtype": "uint8",
+    "length": 41,
+    "offset": 369
+   },
+   {
+    "name": "Beta_sw",
+    "dtype": "uint8",
+    "length": 41,
+    "offset": 410
+   },
+   {
+    "name": "Pd_sw",
+    "dtype": "uint8",
+    "length": 41,
+    "offset": 451
+   },
+   {
+    "name": "Ma_sw",
+    "dtype": "uint8",
+    "length": 41,
+    "offset": 492
+   },
+   {
+    "name": "cone_deg",
+    "dtype": "uint8",
+    "length": 41,
+    "offset": 533
+   },
+   {
+    "name": "clock_deg",
+    "dtype": "uint8",
+    "length": 41,
+    "offset": 574
+   }
+  ]
+ },
+ "cubes": [
+  {
+   "id": "clock-cone-Ma",
+   "frame": "PGSM_fold",
+   "dims": [
+    "clock_deg",
+    "cone_deg",
+    "Ma_sw"
+   ],
+   "shape": [
+    12,
+    6,
+    5
+   ],
+   "quantities": {
+    "Np": {
+     "path": "cubes/clock-cone-Ma/PGSM_fold/Np.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 361,
+       "offset": 0
+      },
+      {
+       "name": "count",
+       "dtype": "uint32",
+       "length": 859,
+       "offset": 1444
+      },
+      {
+       "name": "cell",
+       "dtype": "uint16",
+       "length": 859,
+       "offset": 4880
+      },
+      {
+       "name": "hbin",
+       "dtype": "uint8",
+       "length": 859,
+       "offset": 6598
+      }
+     ]
+    },
+    "Tp": {
+     "path": "cubes/clock-cone-Ma/PGSM_fold/Tp.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 361,
+       "offset": 0
+      },
+      {
+       "name": "count",
+       "dtype": "uint32",
+       "length": 223,
+       "offset": 1444
+      },
+      {
+       "name": "cell",
+       "dtype": "uint16",
+       "length": 223,
+       "offset": 2336
+      },
+      {
+       "name": "hbin",
+       "dtype": "uint8",
+       "length": 223,
+       "offset": 2782
+      }
+     ]
+    },
+    "B": {
+     "path": "cubes/clock-cone-Ma/PGSM_fold/B.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 361,
+       "offset": 0
+      },
+      {
+       "name": "count",
+       "dtype": "uint32",
+       "length": 1080,
+       "offset": 1444
+      },
+      {
+       "name": "cell",
+       "dtype": "uint16",
+       "length": 1080,
+       "offset": 5764
+      },
+      {
+       "name": "hbin",
+       "dtype": "uint8",
+       "length": 1080,
+       "offset": 7924
+      }
+     ]
+    },
+    "V": {
+     "path": "cubes/clock-cone-Ma/PGSM_fold/V.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 361,
+       "offset": 0
+      },
+      {
+       "name": "count",
+       "dtype": "uint32",
+       "length": 242,
+       "offset": 1444
+      },
+      {
+       "name": "cell",
+       "dtype": "uint16",
+       "length": 242,
+       "offset": 2412
+      },
+      {
+       "name": "hbin",
+       "dtype": "uint8",
+       "length": 242,
+       "offset": 2896
+      }
+     ]
+    },
+    "Np_ratio": {
+     "path": "cubes/clock-cone-Ma/PGSM_fold/Np_ratio.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 361,
+       "offset": 0
+      },
+      {
+       "name": "count",
+       "dtype": "uint32",
+       "length": 1219,
+       "offset": 1444
+      },
+      {
+       "name": "cell",
+       "dtype": "uint16",
+       "length": 1219,
+       "offset": 6320
+      },
+      {
+       "name": "hbin",
+       "dtype": "uint8",
+       "length": 1219,
+       "offset": 8758
+      }
+     ]
+    },
+    "B_ratio": {
+     "path": "cubes/clock-cone-Ma/PGSM_fold/B_ratio.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 361,
+       "offset": 0
+      },
+      {
+       "name": "count",
+       "dtype": "uint32",
+       "length": 1258,
+       "offset": 1444
+      },
+      {
+       "name": "cell",
+       "dtype": "uint16",
+       "length": 1258,
+       "offset": 6476
+      },
+      {
+       "name": "hbin",
+       "dtype": "uint8",
+       "length": 1258,
+       "offset": 8992
+      }
+     ]
+    },
+    "Tp_ratio": {
+     "path": "cubes/clock-cone-Ma/PGSM_fold/Tp_ratio.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 361,
+       "offset": 0
+      },
+      {
+       "name": "count",
+       "dtype": "uint32",
+       "length": 229,
+       "offset": 1444
+      },
+      {
+       "name": "cell",
+       "dtype": "uint16",
+       "length": 229,
+       "offset": 2360
+      },
+      {
+       "name": "hbin",
+       "dtype": "uint8",
+       "length": 229,
+       "offset": 2818
+      }
+     ]
+    },
+    "V_ratio": {
+     "path": "cubes/clock-cone-Ma/PGSM_fold/V_ratio.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 361,
+       "offset": 0
+      },
+      {
+       "name": "count",
+       "dtype": "uint32",
+       "length": 245,
+       "offset": 1444
+      },
+      {
+       "name": "cell",
+       "dtype": "uint16",
+       "length": 245,
+       "offset": 2424
+      },
+      {
+       "name": "hbin",
+       "dtype": "uint8",
+       "length": 245,
+       "offset": 2914
+      }
+     ]
+    }
+   },
+   "counts": {
+    "path": "cubes/clock-cone-Ma/PGSM_fold/counts.bin",
+    "sections": [
+     {
+      "name": "n_cond_offsets",
+      "dtype": "uint32",
+      "length": 361,
+      "offset": 0
+     },
+     {
+      "name": "n",
+      "dtype": "uint32",
+      "length": 177,
+      "offset": 1444
+     },
+     {
+      "name": "neff_cond_offsets",
+      "dtype": "uint32",
+      "length": 361,
+      "offset": 2152
+     },
+     {
+      "name": "neff",
+      "dtype": "uint32",
+      "length": 177,
+      "offset": 3596
+     },
+     {
+      "name": "n_cell",
+      "dtype": "uint16",
+      "length": 177,
+      "offset": 4304
+     },
+     {
+      "name": "neff_cell",
+      "dtype": "uint16",
+      "length": 177,
+      "offset": 4658
+     }
+    ]
+   }
+  }
+ ],
+ "js_types": {
+  "uint32": "Uint32Array",
+  "int32": "Int32Array",
+  "uint16": "Uint16Array",
+  "uint8": "Uint8Array",
+  "float32": "Float32Array"
+ }
+}

@@ -1,0 +1,230 @@
+{
+  "version": "grid-v1",
+  "description": "Binning contract shared by the Python atlas pipeline and the web explorer. Change it only by creating grid-v2.",
+  "spatial": {
+    "D_msh": {
+      "column": "R_norm",
+      "edges": [
+        0.0,
+        0.1,
+        0.2,
+        0.3,
+        0.4,
+        0.5,
+        0.6,
+        0.7,
+        0.8,
+        0.9,
+        1.0
+      ],
+      "clip": [
+        -0.1,
+        1.1
+      ],
+      "definition": "fractional depth (|r| - R_mp)/(R_bs - R_mp); values inside clip but outside edges go to the first/last bin, values outside clip are dropped"
+    },
+    "theta_deg": {
+      "edges_range": [
+        0,
+        120,
+        6
+      ],
+      "definition": "arccos(X/|r|) of the boundary-normalized position (X/Y/Z_gsm_norm); 0 = subsolar"
+    },
+    "phi_deg": {
+      "edges_range": [
+        0,
+        360,
+        15
+      ],
+      "definition": "atan2(Z, Y) of the normalized position in the chosen frame, wrapped to [0, 360); 90 = +Z"
+    },
+    "cell_order": [
+      "D_msh",
+      "theta_deg",
+      "phi_deg"
+    ]
+  },
+  "frames": {
+    "GSM": "no rotation",
+    "PGSM": "rotation about X_GSM by the sample's own IMF clock angle, so that the IMF component perpendicular to X points to +Z",
+    "PGSM_fold": "PGSM, then for samples with Bx_imf < 0: magnetic vectors B -> -B and a 180 deg rotation about X, so the quasi-parallel side is always +Z"
+  },
+  "conditions": {
+    "clock_deg": {
+      "edges_range": [
+        0,
+        360,
+        30
+      ],
+      "periodic": true,
+      "definition": "atan2(By_imf, Bz_imf) wrapped to [0, 360); 0 = northward IMF, 90 = +By"
+    },
+    "cone_deg": {
+      "edges_range": [
+        0,
+        90,
+        15
+      ],
+      "definition": "arccos(|Bx_imf| / |B_imf|)"
+    },
+    "Ma_sw": {
+      "column": "Ma_sw",
+      "edges": [
+        0,
+        4,
+        6,
+        8,
+        12,
+        1000000000.0
+      ]
+    },
+    "Pd_sw": {
+      "column": "Pd_sw",
+      "unit": "nPa",
+      "edges": [
+        0,
+        1,
+        2,
+        4,
+        1000000000.0
+      ]
+    },
+    "Beta_sw": {
+      "column": "Beta_sw",
+      "edges": [
+        0,
+        0.5,
+        2,
+        1000000000.0
+      ]
+    },
+    "V_sw": {
+      "unit": "km/s",
+      "edges": [
+        0,
+        400,
+        550,
+        1000000000.0
+      ],
+      "definition": "|V_sw| from Vx_sw, Vy_sw, Vz_sw"
+    }
+  },
+  "cubes": [
+    {
+      "id": "clock-cone-Ma",
+      "dims": [
+        "clock_deg",
+        "cone_deg",
+        "Ma_sw"
+      ]
+    }
+  ],
+  "quantities": {
+    "Np": {
+      "label": "N_p",
+      "unit": "cm^-3",
+      "expr": "Np",
+      "scale": "log",
+      "range": [
+        0.1,
+        1000
+      ]
+    },
+    "Tp": {
+      "label": "T_p",
+      "unit": "K",
+      "expr": "Tp",
+      "scale": "log",
+      "range": [
+        10000.0,
+        100000000.0
+      ]
+    },
+    "B": {
+      "label": "|B|",
+      "unit": "nT",
+      "expr": "|B|",
+      "scale": "log",
+      "range": [
+        0.5,
+        500
+      ]
+    },
+    "V": {
+      "label": "|V|",
+      "unit": "km/s",
+      "expr": "|V|",
+      "scale": "log",
+      "range": [
+        10,
+        1000
+      ]
+    },
+    "Np_ratio": {
+      "label": "N_p / N_p,sw",
+      "unit": "",
+      "expr": "Np / Np_sw",
+      "scale": "log",
+      "range": [
+        0.05,
+        20
+      ]
+    },
+    "B_ratio": {
+      "label": "|B| / |B_IMF|",
+      "unit": "",
+      "expr": "|B| / |B_imf|",
+      "scale": "log",
+      "range": [
+        0.1,
+        30
+      ]
+    },
+    "Tp_ratio": {
+      "label": "T_p / T_p,sw",
+      "unit": "",
+      "expr": "Tp / Tp_sw",
+      "scale": "log",
+      "range": [
+        0.3,
+        1000
+      ]
+    },
+    "V_ratio": {
+      "label": "|V| / |V_sw|",
+      "unit": "",
+      "expr": "|V| / |V_sw|",
+      "scale": "log",
+      "range": [
+        0.02,
+        2
+      ]
+    }
+  },
+  "histogram": {
+    "n_bins": 48,
+    "out_of_range": "clipped into the first/last bin",
+    "quantile_method": "cumulative counts, linear interpolation inside the bin in the axis scale (log10 for log axes)"
+  },
+  "neff": {
+    "interval_s": 3600,
+    "definition": "number of distinct (spacecraft, hour) intervals"
+  },
+  "reliability": {
+    "min_neff": 10,
+    "min_n": 360
+  },
+  "row_filter": "SW_pairing and Norma_pos are true, and all columns used are finite",
+  "spacecraft": [
+    "THA",
+    "THB",
+    "THC",
+    "THD",
+    "THE",
+    "C1",
+    "C3",
+    "MMS",
+    "DS1"
+  ]
+}

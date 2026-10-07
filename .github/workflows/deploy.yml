@@ -16,11 +16,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: '3.11' }
-      - run: pip install hatch
-      - run: ./scripts/build-wheel.sh
+        with: { python-version: '3.12' }
+      - run: pip install -e . polars pyarrow
+      # The public site ships a synthetic atlas until the data policy for a real one is settled;
+      # the app labels it "synthetic data" in its header.
+      - run: python -m mango_explorer.atlas build --synthetic 400000 --out web/public/atlas
       - uses: actions/setup-node@v4
-        with: { node-version: '20' }
+        with: { node-version: '22' }
       - run: cd web && npm ci && npm run build
       - uses: actions/configure-pages@v5
         with:
