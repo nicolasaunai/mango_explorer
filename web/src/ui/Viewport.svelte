@@ -97,7 +97,7 @@
         <button type="button" aria-pressed={display.mode === 'diff'} disabled={!display.canDiff} onclick={() => setCmp('diff')} title={display.canDiff ? 'B / A per cell; hatched where unreliable or |z| < 2 (approximate)' : 'Choose a value statistic to compare'}>B / A</button>
       </div>
     {/if}
-    <span class="tag muted">boundaries: Shue 98 / Jelínek 12 at P<sub>d</sub> = 2 nPa · illustrative</span>
+    <span class="tag muted">boundaries: {BOUNDARY_NOTE}</span>
   </div>
   <div class="side">
     {#if stats.pending}<span class="tag muted">updating…</span>{/if}
