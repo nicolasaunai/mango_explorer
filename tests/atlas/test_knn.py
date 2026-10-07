@@ -3,14 +3,18 @@ import pytest
 
 from mango_explorer.atlas.grid import load_grid
 from mango_explorer.atlas.knn import (
-    SampleAccumulator, display_positions, display_radii, frame_phi_deg, knn_stats,
+    SampleAccumulator,
+    display_positions,
+    display_radii,
+    frame_phi_deg,
+    knn_stats,
 )
 from mango_explorer.atlas.pipeline import build_atlas
 from mango_explorer.atlas.prepare import prepare
+from mango_explorer.atlas.quantities import normalized_angles
 from mango_explorer.atlas.sources import columns_from_polars, iter_polars
 from mango_explorer.atlas.store import read_atlas, read_samples
 from mango_explorer.atlas.synthetic import synthetic_magnetosheath
-from mango_explorer.atlas.quantities import normalized_angles
 
 G = load_grid()
 

@@ -14,10 +14,10 @@ from mango_explorer import boundaries as b
 from mango_explorer.atlas import frames as fr
 from mango_explorer.atlas.binning import hist_bins, spatial_cells
 from mango_explorer.atlas.grid import load_grid
+from mango_explorer.atlas.knn import display_positions, frame_phi_deg, knn_stats
 from mango_explorer.atlas.pipeline import build_atlas
 from mango_explorer.atlas.sources import iter_polars
 from mango_explorer.atlas.stats import hist_quantile
-from mango_explorer.atlas.knn import display_positions, frame_phi_deg, knn_stats
 from mango_explorer.atlas.store import read_atlas, read_samples
 from mango_explorer.atlas.synthetic import synthetic_magnetosheath
 
@@ -91,10 +91,10 @@ def knn_golden(root, manifest, sel):
     nodes = np.concatenate([nodes, [[0.0, 40.0, 0.0]]])   # far outside: NaN
     k, cap = 20, 2.0
     r = knn_stats(nodes, pos, t["q:Np_ratio"][rows], t["interval"][rows], k, cap)
-    nan = lambda a: [None if not np.isfinite(v) else round(float(v), 12) for v in a]  # noqa: E731
+    nan = lambda a: [None if not np.isfinite(v) else round(float(v), 12) for v in a]
     return {"k": k, "cap": cap, "nodes": lst(nodes), "median": nan(r["median"]), "q25": nan(r["q25"]),
             "q75": nan(r["q75"]), "n": r["n"].tolist(), "neff": r["neff"].tolist(),
-            "dist_median": nan(r["dist_median"]), "n_samples": int(len(rows))}
+            "dist_median": nan(r["dist_median"]), "n_samples": len(rows)}
 
 
 def cubes_selected(manifest, sel):

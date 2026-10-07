@@ -51,6 +51,10 @@ The view state lives in the URL hash, so a link reproduces the view.
 - **Statistics live in boundary-normalized space.** The coordinates are D_msh (= MANGO
   `R_norm`), θ and φ.
 - **N_eff** counts distinct (spacecraft, hour) intervals.
+- **Statistics come from bins or from k-NN.**
+  - **Bins:** histograms per cell are summed over the selected condition bins.
+  - **k-NN:** the k nearest samples of each displayed node, measured in the drawn sheath of the frame. A node is NaN when the median neighbour distance exceeds the cap (default 2 R_E).
+  - The k-NN sample table keeps one sample per spacecraft per `--sample-window` seconds (0 keeps them all). The Python reference is `mango_explorer.atlas.knn`.
 
 The legacy Pyodide prototype (`explorer.py`, `data/`, `colormap.py`, `gridding.py`) is kept in
 `src/` with its tests. Its web front end now lives in `old/pyodide-web/`.

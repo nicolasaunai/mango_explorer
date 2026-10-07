@@ -110,7 +110,7 @@ def read_cube(root: Path, entry: dict, grid: Grid) -> CubeData:
 def write_samples(root: Path, table: dict[str, np.ndarray], cube_id: str, window_s: float) -> dict:
     """The k-NN sample table: base geometry in one file, one float32 file per quantity."""
     base = {k: v for k, v in table.items() if not k.startswith("q:")}
-    entry = {"cube": cube_id, "window_s": window_s, "n": int(len(table["d"])),
+    entry = {"cube": cube_id, "window_s": window_s, "n": len(table["d"]),
              "base": {"path": "samples/base.bin", "sections": _write_sections(root / "samples/base.bin", list(base.items()))},
              "quantities": {}}
     for k, v in table.items():
