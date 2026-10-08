@@ -98,8 +98,10 @@ self.onmessage = async (e: MessageEvent<StatsRequest>) => {
       }, [...f.fields.flatMap((p) => [p.values.buffer, p.flags.buffer]), f.shellValues.buffer, f.shellFlags.buffer]);
     } else if (m.type === 'knnProbe' && voxCache) {
       const r = voxelKnnAt(voxCache.v, m.point, voxCache.k, voxCache.cap, KNN.search_factor, voxCache.weighted);
-      post({ type: 'knnProbe', id: m.id, cell: m.cell, quantity: JSON.parse(voxCache.key)[2], values: [], k: voxCache.k, kSearched: voxCache.k,
-        result: { q25: NaN, median: r.value, q75: NaN, n: r.n, neff: 0, distMedian: r.distMedian }, voxels: r.nVoxels });
+      const quantity = JSON.parse(voxCache.key)[2] as QuantityName;
+      const axis = grid.isLog(quantity) ? Math.log10(r.value) : r.value;  // probes report axis space
+      post({ type: 'knnProbe', id: m.id, cell: m.cell, quantity, values: [], k: voxCache.k, kSearched: voxCache.k,
+        result: { q25: NaN, median: axis, q75: NaN, n: r.n, neff: 0, distMedian: r.distMedian }, voxels: r.nVoxels });
     } else if (m.type === 'knnProbe') {
       if (!knnCache) throw new Error('no k-NN query yet');
       const { s, k, kSearched, cap } = knnCache;

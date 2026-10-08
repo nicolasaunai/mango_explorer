@@ -79,6 +79,13 @@ export class SpatialHash {
     return { idx: top.map((j) => this.ix[j]), dist: top.map((j) => Math.sqrt(this.d2[j])) };
   }
 
+  /** Points within radius, left in the buffers read by candidateIndex/candidateD2; returns their count. */
+  within(x: number, y: number, z: number, radius: number): number {
+    return this.collect(x, y, z, radius);
+  }
+  candidateIndex(j: number): number { return this.ix[j]; }
+  candidateD2(j: number): number { return this.d2[j]; }
+
   /** Collect candidates within radius into the internal buffers; returns their count. */
   private collect(x: number, y: number, z: number, radius: number): number {
     const [nx, ny, nz] = this.dims, c = this.cell, r2 = radius * radius;

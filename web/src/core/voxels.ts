@@ -58,36 +58,58 @@ export class VoxelFrame {
 export type VoxelKnnResult = { value: number; n: number; nVoxels: number; distMedian: number };
 
 /** k-NN mean of one node (grid spec "voxels.knn"); `weighted` = 1/d weights as sklearn's 'distance'. */
+let cIdx = new Int32Array(1024), cDist = new Float64Array(1024), cShell = new Int32Array(1024);
+
 export function voxelKnnAt(v: VoxelSet, node: [number, number, number], k: number, cap: number, factor: number,
   weighted: boolean, g: Grid = defaultGrid): VoxelKnnResult {
   const size = g.raw.voxels.size_re, maxR = factor * cap, half = Math.ceil(k / 2);
   const out: VoxelKnnResult = { value: NaN, n: 0, nVoxels: 0, distMedian: NaN };
-  let cand: { i: number; d: number }[] = [];
-  for (let r = Math.min(maxR, Math.max(size, maxR / 8)); ; r = Math.min(2 * r, maxR)) {
-    const { idx, dist } = v.hash.nearest(node[0], node[1], node[2], Number.MAX_SAFE_INTEGER, r);
+  // grow the radius until it holds k samples: all voxels closer than the k-th are then inside
+  let m = 0, r = Math.min(maxR, Math.max(size, maxR / 8));
+  for (; ; r = Math.min(2 * r, maxR)) {
+    m = v.hash.within(node[0], node[1], node[2], r);
     let tot = 0;
-    for (const i of idx) tot += v.n[i];
-    cand = idx.map((i, j) => ({ i, d: dist[j] }));
+    for (let j = 0; j < m; j++) tot += v.n[v.hash.candidateIndex(j)];
     if (tot >= k || r >= maxR) break;
   }
-  cand.sort((a, b) => a.d - b.d || v.vid[a.i] - v.vid[b.i]);
-  let cum = 0, m = 0;
-  for (; m < cand.length; m++) {
-    cum += v.n[cand[m].i];
-    if (Number.isNaN(out.distMedian) && cum >= half) out.distMedian = cand[m].d;
-    if (cum >= k) { m++; break; }
-  }
-  if (cum < half) { out.distMedian = NaN; return out; }
-  let num = 0, den = 0, used = 0;
+  if (m > cIdx.length) { cIdx = new Int32Array(2 * m); cDist = new Float64Array(2 * m); cShell = new Int32Array(2 * m); }
+  // thin distance shells: whole shells are added in any order, only the shells where the
+  // cumulative count crosses k (and k/2, for the median distance) are ordered by (distance, id)
+  const width = size / 4, nShell = Math.floor(r / width) + 2;
+  const shellN = new Float64Array(nShell);
   for (let j = 0; j < m; j++) {
-    const { i, d } = cand[j];
-    const take = j === m - 1 && cum > k ? v.n[i] - (cum - k) : v.n[i];
-    const w = weighted ? 1 / Math.max(d, size / 2) : 1;
-    num += (w * take * v.sum[i]) / v.n[i];
-    den += w * take;
-    used += take;
+    const i = v.hash.candidateIndex(j), d = Math.sqrt(v.hash.candidateD2(j)), sh = Math.min(nShell - 1, Math.floor(d / width));
+    cIdx[j] = i; cDist[j] = d; cShell[j] = sh; shellN[sh] += v.n[i];
   }
-  out.n = used; out.nVoxels = m;
+  let cum = 0, shellK = -1, shellHalf = -1, beforeK = 0, beforeHalf = 0;
+  for (let s = 0; s < nShell; s++) {
+    if (shellHalf < 0 && cum + shellN[s] >= half) { shellHalf = s; beforeHalf = cum; }
+    if (shellK < 0 && cum + shellN[s] >= k) { shellK = s; beforeK = cum; }
+    cum += shellN[s];
+  }
+  if (shellHalf < 0) return out;  // fewer than ceil(k/2) samples within the search radius
+  const ordered = (s: number) => {
+    const list: number[] = [];
+    for (let j = 0; j < m; j++) if (cShell[j] === s) list.push(j);
+    return list.sort((a, b) => cDist[a] - cDist[b] || v.vid[cIdx[a]] - v.vid[cIdx[b]]);
+  };
+  let c = beforeHalf;
+  for (const j of ordered(shellHalf)) { c += v.n[cIdx[j]]; if (c >= half) { out.distMedian = cDist[j]; break; } }
+
+  const last = shellK < 0 ? nShell - 1 : shellK;
+  let num = 0, den = 0, total = 0, nVox = 0;
+  const add = (j: number, take: number) => {
+    const i = cIdx[j], w = weighted ? 1 / Math.max(cDist[j], size / 2) : 1;
+    num += (w * take * v.sum[i]) / v.n[i]; den += w * take; total += take; nVox++;
+  };
+  for (let j = 0; j < m; j++) if (cShell[j] < last) add(j, v.n[cIdx[j]]);
+  c = shellK < 0 ? cum - shellN[last] : beforeK;
+  for (const j of ordered(last)) {
+    const n = v.n[cIdx[j]];
+    if (c + n >= k) { add(j, k - c); c = k; break; }
+    add(j, n); c += n;
+  }
+  out.n = total; out.nVoxels = nVox;
   if (out.distMedian > cap) return out;
   out.value = num / den;
   return out;

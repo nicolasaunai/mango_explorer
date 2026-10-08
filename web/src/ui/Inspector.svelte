@@ -69,7 +69,7 @@
       {/if}
       <div class="counts mono">
         <span>N {fmt.format(p.n)}</span>
-        <span>N<sub>eff</sub> {knn ? '' : '≤ '}{fmt.format(p.neffUpper)}</span>
+        {#if !(kp && kp.voxels !== undefined)}<span>N<sub>eff</sub> {knn ? '' : '≤ '}{fmt.format(p.neffUpper)}</span>{/if}
         {#if flag === FLAG.WEAK}<span class="weak">below reliability threshold</span>{/if}
       </div>
     {:else if p && knn}
