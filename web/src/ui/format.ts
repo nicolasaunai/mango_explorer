@@ -7,6 +7,7 @@ export const richText = (t: string) =>
 
 export const STAT_LABEL: Record<Stat, string> = {
   median: 'median', q25: '25th percentile', q75: '75th percentile', iqr_rel: 'IQR / median', n: 'samples N', neff: 'N_eff (upper bound)',
+  wmean: 'k-NN 1/d-weighted mean', mean: 'k-NN mean',
 };
 
 /** "median of N_p / N_p,sw" as rich text, with the unit when it applies. */

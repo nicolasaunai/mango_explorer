@@ -124,6 +124,23 @@ def write_samples(root: Path, table: dict[str, np.ndarray], cube_id: str, fracti
     return entry
 
 
+def write_voxels(root: Path, vox: dict) -> dict:
+    base = Path("voxels") / vox["frame"]
+    entry = {"frame": vox["frame"], "base": {"path": (base / "base.bin").as_posix(),
+             "sections": _write_sections(root / base / "base.bin", list(vox["base"].items()))}, "quantities": {}}
+    for q, arrays in vox["quantities"].items():
+        rel = base / f"{q}.bin"
+        entry["quantities"][q] = {"path": rel.as_posix(), "sections": _write_sections(root / rel, list(arrays.items()))}
+    return entry
+
+
+def read_voxels(root: Path, entry: dict) -> tuple[dict, dict]:
+    root = Path(root)
+    base = dict(_read_sections(root / entry["base"]["path"], entry["base"]["sections"]))
+    quantities = {q: dict(_read_sections(root / f["path"], f["sections"])) for q, f in entry["quantities"].items()}
+    return base, quantities
+
+
 def read_samples(root: Path, entry: dict) -> dict[str, np.ndarray]:
     root = Path(root)
     out = dict(_read_sections(root / entry["base"]["path"], entry["base"]["sections"]))
@@ -133,7 +150,7 @@ def read_samples(root: Path, entry: dict) -> dict[str, np.ndarray]:
 
 
 def write_atlas(root: Path, grid: Grid, cubes: list[CubeData], hours: dict[str, np.ndarray],
-                info: dict, samples: dict | None = None) -> dict:
+                info: dict, samples: dict | None = None, voxels: list[dict] | None = None) -> dict:
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
     manifest = {
@@ -146,16 +163,21 @@ def write_atlas(root: Path, grid: Grid, cubes: list[CubeData], hours: dict[str, 
         "cubes": [write_cube(root, c) for c in cubes],
         "js_types": _JS_TYPES,
     }
+    if voxels:
+        manifest["voxels"] = {"size_re": grid.raw["voxels"]["size_re"],
+                              "frames": [write_voxels(root, v) for v in voxels]}
     if samples is not None:
         manifest["samples"] = write_samples(root, samples["table"], samples["cube"], samples["fraction"])
     (root / "manifest.json").write_text(json.dumps(manifest, indent=1))
     return manifest
 
 
-def pack_atlas(src: Path, dst: Path) -> dict:
+def pack_atlas(src: Path, dst: Path, sample_fraction: float | None = None) -> dict:
     """Copy an atlas with every binary file gzipped (``.bin.gz``) for static hosting.
 
     The browser decompresses these itself, so the host needs no special configuration.
+    `sample_fraction` (of the full data) thins the k-NN sample table further, e.g. 0.03 for a
+    website from a 0.1 build; the voxel sums always keep the full data.
     """
     import gzip
     import shutil
@@ -166,12 +188,14 @@ def pack_atlas(src: Path, dst: Path) -> dict:
         shutil.rmtree(dst)
 
     def pack(entry: dict) -> None:
-        data = (src / entry["path"]).read_bytes()
+        data = (Path(entry.pop("_root", src)) / entry["path"]).read_bytes()
         entry["path"] += ".gz"
         out = dst / entry["path"]
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_bytes(gzip.compress(data, compresslevel=9, mtime=0))
 
+    if sample_fraction is not None and "samples" in manifest:
+        _thin_samples(src, manifest, sample_fraction)
     pack(manifest["hours"])
     for cube in manifest["cubes"]:
         for f in cube["quantities"].values():
@@ -179,6 +203,10 @@ def pack_atlas(src: Path, dst: Path) -> dict:
         pack(cube["counts"])
         if "spacecraft" in cube:
             pack(cube["spacecraft"])
+    for v in manifest.get("voxels", {}).get("frames", []):
+        pack(v["base"])
+        for f in v["quantities"].values():
+            pack(f)
     if "samples" in manifest:
         pack(manifest["samples"]["base"])
         for f in manifest["samples"]["quantities"].values():
@@ -186,6 +214,26 @@ def pack_atlas(src: Path, dst: Path) -> dict:
     manifest["encoding"] = "gzip"
     (dst / "manifest.json").write_text(json.dumps(manifest, indent=1))
     return manifest
+
+
+def _thin_samples(src: Path, manifest: dict, fraction: float) -> None:
+    """Rewrite the sample table (in a temporary copy) keeping a random subset of its rows."""
+    import tempfile
+
+    entry = manifest["samples"]
+    if fraction >= entry["fraction"]:
+        return
+    table = read_samples(src, entry)
+    keep = np.random.default_rng(0).random(len(table["x"])) < fraction / entry["fraction"]
+    off = table["cond_offsets"].astype(np.int64)
+    cond = np.repeat(np.arange(len(off) - 1), np.diff(off))[keep]
+    new = {k: v[keep] for k, v in table.items() if k != "cond_offsets"}
+    new["cond_offsets"] = np.searchsorted(cond, np.arange(len(off))).astype(np.uint32)
+    tmp = Path(tempfile.mkdtemp())
+    thinned = write_samples(tmp, new, entry["cube"], fraction)
+    for f in [thinned["base"], *thinned["quantities"].values()]:
+        f["_root"] = str(tmp)  # pack reads these files from the temporary copy
+    manifest["samples"] = thinned
 
 
 def read_atlas(root: Path):

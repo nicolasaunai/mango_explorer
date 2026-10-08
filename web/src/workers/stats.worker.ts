@@ -1,6 +1,8 @@
 // Sums the selected condition bins of a cube and reduces them to per-cell statistics.
 import { CubeView, SampleTable, httpFetcher, loadManifest, type FetchBytes, type Manifest, type QueryResult, type Selection } from '../core/atlas';
-import { buildSamples, knnField, type KnnSamples } from '../core/knnField';
+import { buildSamples, knnField, voxelField, type KnnSamples } from '../core/knnField';
+import { VoxelFrame, voxelKnnAt, type VoxelSet } from '../core/voxels';
+import { isVoxelStat } from '../core/compute';
 import { DISPLAY_BOUNDARIES } from '../core/display';
 import { robustRange as range2 } from '../core/compute';
 import { cellFlags, cellSpread, cellValues, depthProfile, robustRange } from '../core/compute';
@@ -14,6 +16,8 @@ const cubes = new Map<FrameName, Promise<CubeView>>();
 let last: { quantity: QuantityName; res: QueryResult; frame: FrameName; selection: Selection } | null = null;
 
 let samples: Promise<SampleTable> | null = null;
+const voxelFrames = new Map<string, Promise<VoxelFrame>>();
+let voxCache: { key: string; v: VoxelSet; k: number; cap: number; weighted: boolean } | null = null;
 let knnCache: { key: string; s: KnnSamples; k: number; kSearched: number; cap: number } | null = null;
 
 /** k is given in neighbours of the full dataset; the browser holds a random fraction of it, so the
@@ -51,8 +55,28 @@ self.onmessage = async (e: MessageEvent<StatsRequest>) => {
         values, flags, n, neffUpper, spread, range: robustRange(values, flags),
         profile: depthProfile(res, m.quantity, m.profileThetaMax), ms: performance.now() - t0,
       }, [values.buffer, flags.buffer, n.buffer, neffUpper.buffer, spread.buffer]);
+    } else if (m.type === 'knn' && isVoxelStat(m.stat)) {
+      // full data: k-NN means from the voxel sums
+      const t0 = performance.now();
+      if (!voxelFrames.has(m.frame)) voxelFrames.set(m.frame, VoxelFrame.load(manifest, m.frame, fetchBytes));
+      const vf = await voxelFrames.get(m.frame)!;
+      const key = JSON.stringify(['vox', m.frame, m.quantity, m.selection, m.cap]);
+      if (voxCache?.key !== key) voxCache = { key, v: await vf.select(m.quantity, m.selection, m.cap / 2), k: m.k, cap: m.cap, weighted: true };
+      voxCache.k = m.k; voxCache.weighted = m.stat === 'wmean';
+      knnCache = null;
+      const f = voxelField(voxCache.v, m.quantity, m.stat, m.planes, m.shell, DISPLAY_BOUNDARIES,
+        { k: m.k, cap: m.cap, factor: KNN.search_factor });
+      const all = new Float32Array([...f.fields.flatMap((p) => [...p.values]), ...f.shellValues]);
+      const flags = new Uint8Array([...f.fields.flatMap((p) => [...p.flags]), ...f.shellFlags]);
+      post({
+        type: 'knn', id: m.id, frame: m.frame, quantity: m.quantity, stat: m.stat, shell: m.shell,
+        fields: f.fields, shellValues: f.shellValues, shellFlags: f.shellFlags,
+        profile: f.profile, range: range2(all, flags), nSamples: voxCache.v.total, ms: performance.now() - t0,
+        k: m.k, kSearched: m.k, fraction: 1,
+      }, [...f.fields.flatMap((p) => [p.values.buffer, p.flags.buffer]), f.shellValues.buffer, f.shellFlags.buffer]);
     } else if (m.type === 'knn') {
       const t0 = performance.now();
+      voxCache = null;
       samples ??= SampleTable.load(manifest, fetchBytes);
       const table = await samples;
       const key = JSON.stringify([m.frame, m.quantity, m.selection, m.cap]);
@@ -72,6 +96,10 @@ self.onmessage = async (e: MessageEvent<StatsRequest>) => {
         profile: f.profile, range: range2(all, flags), nSamples: knnCache.s.n, ms: performance.now() - t0,
         k: m.k, kSearched, fraction: manifest.samples?.fraction ?? 1,
       }, [...f.fields.flatMap((p) => [p.values.buffer, p.flags.buffer]), f.shellValues.buffer, f.shellFlags.buffer]);
+    } else if (m.type === 'knnProbe' && voxCache) {
+      const r = voxelKnnAt(voxCache.v, m.point, voxCache.k, voxCache.cap, KNN.search_factor, voxCache.weighted);
+      post({ type: 'knnProbe', id: m.id, cell: m.cell, quantity: JSON.parse(voxCache.key)[2], values: [], k: voxCache.k, kSearched: voxCache.k,
+        result: { q25: NaN, median: r.value, q75: NaN, n: r.n, neff: 0, distMedian: r.distMedian }, voxels: r.nVoxels });
     } else if (m.type === 'knnProbe') {
       if (!knnCache) throw new Error('no k-NN query yet');
       const { s, k, kSearched, cap } = knnCache;

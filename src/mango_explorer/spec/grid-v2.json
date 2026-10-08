@@ -246,5 +246,11 @@
       "p": 9.7098
     },
     "definition": "x = nose - rho^2/(4 p) about +X (R_E). MANGO normalizes magnetosheath positions (X/Y/Z_gsm_norm) radially between two fixed reference surfaces; these paraboloids are fitted to the served positions (scripts/fit_reference_boundaries.py, dataset 2026.0: median |residual| 0.12 R_E). The exact surfaces are not published with the data."
+  },
+  "voxels": {
+    "size_re": 0.25,
+    "index_offset": 512,
+    "definition": "Per (frame, condition bin, voxel) the number of samples and the sum of the raw value of each quantity (finite values only). Voxels are cubes of size_re in the normalized frame coordinates; id = (i<<20)|(j<<10)|k with i = floor(x/size_re)+index_offset (same for j with y, k with z).",
+    "knn": "For a node, voxels are ordered by the distance d from the node to their centre (ties by id); their counts are accumulated until k samples are reached (the last voxel contributes only the samples still needed). NaN when fewer than ceil(k/2) samples lie within search_factor*cap_re, or when the voxel where the cumulative count reaches ceil(k/2) is farther than cap_re. Value = sum_v w_v * f_v * S_v / sum_v w_v * f_v * N_v with f_v the used fraction of voxel v, S_v and N_v its sum and count, and w_v = 1/max(d_v, size_re/2) for the distance-weighted mean (sklearn KNeighborsRegressor weights='distance') or 1 for the plain mean."
   }
 }

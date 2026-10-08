@@ -146,3 +146,16 @@ def test_packed_atlas_reads_back_identically(tmp_path, df):
     np.testing.assert_array_equal(a["hist"]["Np"], b["hist"]["Np"])
     np.testing.assert_array_equal(read_samples(tmp_path / "raw", m1["samples"])["x"],
                                   read_samples(tmp_path / "packed", m2["samples"])["x"])
+
+
+def test_pack_can_thin_the_sample_table(tmp_path, df):
+    from mango_explorer.atlas.store import pack_atlas, read_samples
+
+    build_atlas(iter_polars(df, 15_000), G, tmp_path / "raw", sample_fraction=0.5, log=lambda *_: None)
+    m = pack_atlas(tmp_path / "raw", tmp_path / "packed", sample_fraction=0.1)
+    assert m["samples"]["fraction"] == 0.1
+    raw, _, _ = read_atlas(tmp_path / "raw")
+    a, b = read_samples(tmp_path / "raw", raw["samples"]), read_samples(tmp_path / "packed", m["samples"])
+    assert 0.12 < len(b["x"]) / len(a["x"]) < 0.28
+    assert b["cond_offsets"][-1] == len(b["x"])
+    assert np.isin(b["x"], a["x"]).all()

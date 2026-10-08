@@ -1,7 +1,8 @@
 <script lang="ts">
   import { app, patch, toggleLayer } from '../state/app.svelte';
   import { grid, type QuantityName } from '../core/grid';
-  import { PLANES, STATS } from '../state/schema';
+  import { PLANES, STATS_FOR } from '../state/schema';
+  import { isVoxelStat } from '../core/compute';
   import CopyPython from './CopyPython.svelte';
   import { stats } from '../state/stats.svelte';
 
@@ -10,8 +11,12 @@
     { title: 'Compression vs solar wind', items: ['Np_ratio', 'B_ratio', 'Tp_ratio', 'V_ratio'] },
     { title: 'Local values', items: ['Np', 'Tp', 'B', 'V'] },
   ];
-  const statLabel: Record<(typeof STATS)[number], string> = {
-    median: 'median', q25: 'P25', q75: 'P75', iqr_rel: 'IQR/med', n: 'N', neff: 'N_eff',
+  const statLabel: Record<string, string> = {
+    median: 'median', q25: 'P25', q75: 'P75', iqr_rel: 'IQR/med', n: 'N', neff: 'N_eff', wmean: '1/d mean', mean: 'mean',
+  };
+  const setSource = (source: 'bins' | 'knn') => {
+    const allowed = STATS_FOR[source] as readonly string[];
+    patch({ source, range: null, stat: allowed.includes(app.stat) ? app.stat : (allowed[0] as typeof app.stat) });
   };
   const fold = $derived(app.frame === 'PGSM_fold');
   // spec labels are plain text ("N_p / N_p,sw", "cm^-3"); render subscripts and superscripts
@@ -39,15 +44,16 @@
   <div class="ctl">
     <span class="eyebrow">Statistics from</span>
     <div class="seg">
-      <button type="button" aria-pressed={app.source === 'bins'} onclick={() => patch({ source: 'bins', range: null })}>Bins</button>
-      <button type="button" aria-pressed={app.source === 'knn'} onclick={() => patch({ source: 'knn', range: null })}>k-NN</button>
+      <button type="button" aria-pressed={app.source === 'bins'} onclick={() => setSource('bins')}>Bins</button>
+      <button type="button" aria-pressed={app.source === 'knn'} onclick={() => setSource('knn')}>k-NN</button>
     </div>
     {#if app.source === 'knn'}
       <label class="num"><span>k neighbours</span>
         <input id="knn-k" type="number" min="1" step="1" value={app.k} class="mono"
           onchange={(e) => { const v = Math.round(Number((e.currentTarget as HTMLInputElement).value)); if (v >= 1) patch({ k: v }); }} />
         <span class="muted small">full data</span></label>
-      {#if stats.knn}<p class="na">Searching {stats.knn.kSearched.toLocaleString('en-US')} neighbours among the {Math.round(stats.knn.fraction * 100)} % random sample held by the browser ({stats.knn.nSamples.toLocaleString('en-US')} samples selected) · {Math.round(stats.knn.ms)} ms.</p>{/if}
+      {#if stats.knn && isVoxelStat(stats.knn.stat)}<p class="na">Full data: {stats.knn.nSamples.toLocaleString('en-US')} samples selected, k nearest from voxel sums ({grid.raw.voxels.size_re} R<sub>E</sub>) · {Math.round(stats.knn.ms)} ms.</p>
+      {:else if stats.knn}<p class="na">Quantiles: searching {stats.knn.kSearched.toLocaleString('en-US')} neighbours among the {Math.round(stats.knn.fraction * 100)} % random sample held by the browser ({stats.knn.nSamples.toLocaleString('en-US')} samples selected) · {Math.round(stats.knn.ms)} ms.</p>{/if}
       <label class="num"><span>cap (R<sub>E</sub>)</span>
         <input type="range" min="0.25" max="6" step="0.25" value={app.cap} onchange={(e) => patch({ cap: Number((e.currentTarget as HTMLInputElement).value) })} />
         <span class="mono">{app.cap}</span></label>
@@ -58,7 +64,7 @@
   <div class="ctl">
     <span class="eyebrow">Statistic</span>
     <div class="chips">
-      {#each STATS as s (s)}
+      {#each STATS_FOR[app.source] as s (s)}
         <button type="button" class="chip" aria-pressed={app.stat === s} onclick={() => patch({ stat: s })}>{statLabel[s]}</button>
       {/each}
     </div>

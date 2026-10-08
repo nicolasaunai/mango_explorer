@@ -12,7 +12,7 @@
   const profileA = $derived(app.pinA && !knn ? (stats.resultA?.profile ?? []).filter((p) => p.n > 0) : []);
   const log = $derived(grid.isLog(app.quantity));
   const yr = $derived.by(() => {
-    const v = [...profile, ...profileA].flatMap((p) => [p.q25, p.q75]).filter(Number.isFinite);
+    const v = [...profile, ...profileA].flatMap((p) => [p.q25, p.q50, p.q75]).filter(Number.isFinite);
     if (!v.length) return [0, 1] as [number, number];
     const lo = Math.min(...v), hi = Math.max(...v), pad = (hi - lo) * 0.08 || 0.1;
     return [lo - pad, hi + pad] as [number, number];
@@ -20,8 +20,9 @@
   const x = (d: number) => L + d * (W - L - R);
   const y = (v: number) => T + (1 - (v - yr[0]) / (yr[1] - yr[0])) * (H - T - B);
   const mid = (p: { d0: number; d1: number }) => (p.d0 + p.d1) / 2;
-  const band = $derived(profile.length
-    ? `M${profile.map((p) => `${x(mid(p))},${y(p.q75)}`).join('L')}L${[...profile].reverse().map((p) => `${x(mid(p))},${y(p.q25)}`).join('L')}Z` : '');
+  const withBand = $derived(profile.filter((p) => Number.isFinite(p.q25) && Number.isFinite(p.q75)));
+  const band = $derived(withBand.length
+    ? `M${withBand.map((p) => `${x(mid(p))},${y(p.q75)}`).join('L')}L${[...withBand].reverse().map((p) => `${x(mid(p))},${y(p.q25)}`).join('L')}Z` : '');
   const line = $derived(profile.length ? `M${profile.map((p) => `${x(mid(p))},${y(p.q50)}`).join('L')}` : '');
   const yt = $derived(ticks(yr[0], yr[1], log, 4));
   const lineA = $derived(profileA.length ? `M${profileA.map((p) => `${x(mid(p))},${y(p.q50)}`).join('L')}` : '');

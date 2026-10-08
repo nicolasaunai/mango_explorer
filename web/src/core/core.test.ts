@@ -165,3 +165,29 @@ describe('packed atlases', () => {
     expect(Array.from(new Uint8Array(await maybeGunzip(plain.buffer)))).toEqual([1, 2, 3, 250]);
   });
 });
+
+describe('voxel k-NN', () => {
+  const root = fileURLToPath(new URL('../../../golden/atlas-mini/', import.meta.url));
+  const fetchBytes: FetchBytes = async (p) => {
+    const buf = await readFile(root + p);
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+  };
+  it('reproduces the Python voxel k-NN (1/d-weighted and plain means)', async () => {
+    const { VoxelFrame, voxelKnnAt } = await import('./voxels');
+    const ref = golden.atlas_mini, gv = ref.voxel_knn;
+    const frame = await VoxelFrame.load(await loadManifest(fetchBytes), 'PGSM_fold', fetchBytes);
+    const set = await frame.select('Np_ratio', ref.selection, gv.cap / 2);
+    expect(set.total).toBe(gv.n_selected);
+    expect(set.vid.length).toBe(gv.n_voxels_selected);
+    for (const [name, weighted] of [['weighted', true], ['uniform', false]] as const) {
+      gv.nodes.forEach((node, i) => {
+        const r = voxelKnnAt(set, node as [number, number, number], gv.k, gv.cap, grid.raw.knn.search_factor, weighted);
+        const want = gv[name];
+        expect(r.nVoxels).toBe(want.n_voxels[i]);
+        expect(r.n).toBe(want.n[i]);
+        if (want.value[i] === null) expect(r.value).toBeNaN(); else close(r.value, want.value[i] as number, 1e-6, 1e-9);
+        if (want.dist_median[i] === null) expect(r.distMedian).toBeNaN(); else close(r.distMedian, want.dist_median[i] as number, 1e-9, 1e-9);
+      });
+    }
+  });
+});

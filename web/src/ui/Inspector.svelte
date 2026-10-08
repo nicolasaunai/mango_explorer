@@ -39,21 +39,23 @@
     </header>
     <div class="where mono">D {b.d[0].toFixed(1)}–{b.d[1].toFixed(1)} · θ {b.theta[0]}–{b.theta[1]}° · φ {b.phi[0]}–{b.phi[1]}°</div>
     {#if knn && kp}
-      <div class="mono muted">{kp.result.n} of {kp.kSearched} searched (k = {kp.k.toLocaleString('en-US')} full data) · median distance {Number.isFinite(kp.result.distMedian) ? kp.result.distMedian.toFixed(2) : '—'} R<sub>E</sub> (cap {app.cap})</div>
+      <div class="mono muted">{#if kp.voxels !== undefined}{kp.result.n.toLocaleString('en-US')} nearest samples (full data, {kp.voxels} voxels){:else}{kp.result.n} of {kp.kSearched} searched (k = {kp.k.toLocaleString('en-US')} full data){/if} · median distance {Number.isFinite(kp.result.distMedian) ? kp.result.distMedian.toFixed(2) : '—'} R<sub>E</sub> (cap {app.cap})</div>
     {/if}
     {#if p && p.n > 0 && Number.isFinite(p.q50)}
       <div class="val"><span class="big mono">{formatValue(phys(p.q50))}</span>
         <span class="muted">{@html richText(grid.raw.quantities[app.quantity].label)}{#if unit}&nbsp;{@html richText(unit)}{/if}</span></div>
-      <div class="mono muted">IQR {formatValue(phys(p.q25))} – {formatValue(phys(p.q75))}</div>
+      {#if Number.isFinite(p.q25)}<div class="mono muted">IQR {formatValue(phys(p.q25))} – {formatValue(phys(p.q75))}</div>{/if}
       {#if Number.isFinite(aMedian)}
         <div class="mono">A {formatValue(phys(aMedian))} · B/A {formatValue(log ? 10 ** (p.q50 - aMedian) : p.q50 / aMedian)}</div>
       {/if}
+      {#if maxH > 1 || p.hist.some((h) => h > 0)}
       <svg viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
         {#each Array.from(p.hist) as h, i (i)}
           <rect x={(i / p.hist.length) * 100} width={100 / p.hist.length - 0.3} y={28 - (h / maxH) * 26} height={(h / maxH) * 26} />
         {/each}
         <line x1={medianX} x2={medianX} y1="0" y2="28" />
       </svg>
+      {/if}
       {#if p.spacecraft.length}
         {@const total = p.spacecraft.reduce((a, s) => a + s.n, 0)}
         <div class="mix" aria-label="Samples per spacecraft">

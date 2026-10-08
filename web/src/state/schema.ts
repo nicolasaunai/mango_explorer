@@ -10,7 +10,12 @@ export const N_CONE = grid.conditionEdges('cone_deg').length - 1;
 export const N_MA = grid.conditionEdges('Ma_sw').length - 1;
 
 export const VIEWS = ['iso', 'sun', 'dusk', 'north', 'tail'] as const;
-export const STATS = ['median', 'q25', 'q75', 'iqr_rel', 'n', 'neff'] as const;
+export const STATS = ['median', 'q25', 'q75', 'iqr_rel', 'n', 'neff', 'wmean', 'mean'] as const;
+/** Statistics offered per source: k-NN means use the full data (voxel sums). */
+export const STATS_FOR = {
+  bins: ['median', 'q25', 'q75', 'iqr_rel', 'n', 'neff'],
+  knn: ['wmean', 'mean', 'median', 'q25', 'q75'],
+} as const;
 export const PLANES = ['XY', 'XZ', 'YZ'] as const;
 export const LAYERS = ['mp', 'bs', 'tint', 'shells', 'slice', 'zgsm'] as const;
 

@@ -30,7 +30,8 @@ export type KnnReply = {
   /** k as requested (neighbours in the full dataset) and as searched in the random sample */
   k: number; kSearched: number; fraction: number;
 };
-export type KnnProbeReply = { type: 'knnProbe'; id: number; cell: number; quantity: QuantityName; result: KnnResult; values: number[]; k: number; kSearched: number };
+export type KnnProbeReply = { type: 'knnProbe'; id: number; cell: number; quantity: QuantityName; result: KnnResult; values: number[];
+  k: number; kSearched: number; /** set for full-data voxel means: number of voxels used */ voxels?: number };
 export type StatsReply =
   | { type: 'ready'; id: number; manifest: Manifest }
   | KnnReply

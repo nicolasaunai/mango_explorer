@@ -18,8 +18,9 @@ from mango_explorer.atlas.knn import frame_positions, knn_stats
 from mango_explorer.atlas.pipeline import build_atlas
 from mango_explorer.atlas.sources import iter_polars
 from mango_explorer.atlas.stats import hist_quantile
-from mango_explorer.atlas.store import read_atlas, read_samples
+from mango_explorer.atlas.store import read_atlas, read_samples, read_voxels
 from mango_explorer.atlas.synthetic import synthetic_magnetosheath
+from mango_explorer.atlas.voxels import select_voxels, voxel_centers, voxel_knn
 
 ROOT = Path(__file__).resolve().parents[1] / "golden"
 G = load_grid()
@@ -103,6 +104,24 @@ def knn_golden(root, manifest, sel):
             "dist_median": nan(r["dist_median"]), "n_samples": len(rows)}
 
 
+def voxel_golden(root, manifest, sel):
+    entry = next(v for v in manifest["voxels"]["frames"] if v["frame"] == "PGSM_fold")
+    base, qs = read_voxels(root, entry)
+    vid, n, s = select_voxels(base, qs["Np_ratio"], cubes_selected(manifest, sel))
+    rng = np.random.default_rng(11)
+    centers = voxel_centers(vid, G)
+    nodes = centers[rng.choice(len(centers), 12, replace=False)] + rng.normal(0, 0.4, (12, 3))
+    nodes = np.concatenate([nodes, [[0.0, 40.0, 0.0]]])
+    k, cap = 300, 3.0
+    out = {"k": k, "cap": cap, "nodes": lst(nodes), "n_selected": int(n.sum()), "n_voxels_selected": len(vid)}
+    for name, weighted in (("weighted", True), ("uniform", False)):
+        r = voxel_knn(nodes, vid, n, s, G, k=k, cap=cap, weighted=weighted)
+        out[name] = {"value": [None if not np.isfinite(v) else round(float(v), 12) for v in r["value"]],
+                     "n": r["n"].tolist(), "n_voxels": r["n_voxels"].tolist(),
+                     "dist_median": [None if not np.isfinite(v) else round(float(v), 12) for v in r["dist_median"]]}
+    return out
+
+
 def cubes_selected(manifest, sel):
     entry = manifest["cubes"][0]
     axes = [sel.get(d, list(range(n))) for d, n in zip(entry["dims"], entry["shape"])]
@@ -126,7 +145,8 @@ def atlas_mini():
     clock_neff = [len(np.unique(keys[np.isin(hours["cone_deg"], sel["cone_deg"])
                                           & (hours["clock_deg"] == k)])) for k in range(12)]
     knn = knn_golden(out, manifest, sel)
-    return {"selection": sel, "frame": "PGSM_fold", "quantity": "Np_ratio", "knn": knn,
+    vox = voxel_golden(out, manifest, sel)
+    return {"selection": sel, "frame": "PGSM_fold", "quantity": "Np_ratio", "knn": knn, "voxel_knn": vox,
             "hours_n": int(hours["n"][in_sel].sum()), "hours_neff": len(np.unique(keys[in_sel])),
             "clock_marginal_neff": clock_neff,
             "cells": nz.tolist(), "n": q["n"][nz].tolist(),

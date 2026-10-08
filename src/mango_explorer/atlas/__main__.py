@@ -32,11 +32,12 @@ def main(argv=None) -> None:
     pk = sub.add_parser("pack", help="gzip an atlas for static hosting")
     pk.add_argument("src", type=Path)
     pk.add_argument("dst", type=Path)
+    pk.add_argument("--sample-fraction", type=float, help="thin the k-NN sample table to this fraction of the data")
     args = p.parse_args(argv)
     if args.cmd == "pack":
         from mango_explorer.atlas.store import pack_atlas
 
-        pack_atlas(args.src, args.dst)
+        pack_atlas(args.src, args.dst, args.sample_fraction)
         print(f"packed {args.src} -> {args.dst}")
         return
 

@@ -16,6 +16,7 @@ export type Manifest = {
   hours: FileEntry & { n_rows: number };
   cubes: CubeEntry[];
   samples?: { cube: string; fraction: number; n: number; base: FileEntry; quantities: Record<string, FileEntry> };
+  voxels?: { size_re: number; frames: { frame: string; base: FileEntry; quantities: Record<string, FileEntry> }[] };
 };
 export type Selection = Partial<Record<ConditionName, number[] | null>>;
 export type FetchBytes = (path: string) => Promise<ArrayBuffer>;

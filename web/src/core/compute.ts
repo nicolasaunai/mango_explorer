@@ -3,7 +3,9 @@ import { grid as defaultGrid, type Grid, type QuantityName } from './grid';
 import type { QueryResult } from './atlas';
 import { histQuantile } from './stats';
 
-export type Stat = 'median' | 'q25' | 'q75' | 'iqr_rel' | 'n' | 'neff';
+export type Stat = 'median' | 'q25' | 'q75' | 'iqr_rel' | 'n' | 'neff' | 'wmean' | 'mean';
+/** Statistics computed from the voxel sums (full data); the others need value distributions. */
+export const isVoxelStat = (s: Stat) => s === 'wmean' || s === 'mean';
 export const FLAG = { EMPTY: 0, WEAK: 1, OK: 2 } as const;
 
 /** Whether colour values of (q, stat) are log10 of the physical value. */
@@ -39,6 +41,7 @@ export function cellValues(res: QueryResult, q: QuantityName, stat: Stat, g: Gri
       case 'median': out[c] = quantileAxis(res.hist, c, edges, nb, 0.5); break;
       case 'q25': out[c] = quantileAxis(res.hist, c, edges, nb, 0.25); break;
       case 'q75': out[c] = quantileAxis(res.hist, c, edges, nb, 0.75); break;
+      case 'wmean': case 'mean': break; // k-NN only
       case 'iqr_rel': {
         const v = (p: number) => { const a = quantileAxis(res.hist, c, edges, nb, p); return log ? 10 ** a : a; };
         out[c] = (v(0.75) - v(0.25)) / Math.abs(v(0.5));

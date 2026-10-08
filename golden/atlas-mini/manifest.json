@@ -1,7 +1,7 @@
 {
  "format": "mango-atlas/1",
  "grid": "grid-v2",
- "created": "2026-10-07T16:39:18+00:00",
+ "created": "2026-10-08T07:41:22+00:00",
  "source": {
   "kind": "synthetic"
  },
@@ -409,6 +409,169 @@
   "uint16": "Uint16Array",
   "uint8": "Uint8Array",
   "float32": "Float32Array"
+ },
+ "voxels": {
+  "size_re": 0.25,
+  "frames": [
+   {
+    "frame": "PGSM_fold",
+    "base": {
+     "path": "voxels/PGSM_fold/base.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 361,
+       "offset": 0
+      },
+      {
+       "name": "voxel",
+       "dtype": "uint32",
+       "length": 811,
+       "offset": 1444
+      }
+     ]
+    },
+    "quantities": {
+     "Np": {
+      "path": "voxels/PGSM_fold/Np.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 811,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 811,
+        "offset": 3244
+       }
+      ]
+     },
+     "Tp": {
+      "path": "voxels/PGSM_fold/Tp.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 811,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 811,
+        "offset": 3244
+       }
+      ]
+     },
+     "B": {
+      "path": "voxels/PGSM_fold/B.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 811,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 811,
+        "offset": 3244
+       }
+      ]
+     },
+     "V": {
+      "path": "voxels/PGSM_fold/V.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 811,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 811,
+        "offset": 3244
+       }
+      ]
+     },
+     "Np_ratio": {
+      "path": "voxels/PGSM_fold/Np_ratio.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 811,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 811,
+        "offset": 3244
+       }
+      ]
+     },
+     "B_ratio": {
+      "path": "voxels/PGSM_fold/B_ratio.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 811,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 811,
+        "offset": 3244
+       }
+      ]
+     },
+     "Tp_ratio": {
+      "path": "voxels/PGSM_fold/Tp_ratio.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 811,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 811,
+        "offset": 3244
+       }
+      ]
+     },
+     "V_ratio": {
+      "path": "voxels/PGSM_fold/V_ratio.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 811,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 811,
+        "offset": 3244
+       }
+      ]
+     }
+    }
+   }
+  ]
  },
  "samples": {
   "cube": "clock-cone-Ma",
