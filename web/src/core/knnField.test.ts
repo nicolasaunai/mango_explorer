@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { FIELD_HALF, FIELD_N, knnField, planePoint } from './knnField';
+import { FIELD_HALF, FIELD_N, knnField, knnNode, planePoint } from './knnField';
 import { SpatialHash, positionAt } from './knn';
 import { DISPLAY_BOUNDARIES as b } from './display';
 import { FLAG } from './compute';
 import { normalizedCoords } from './geometry';
 import { grid } from './grid';
+import { SHELL_GRID, shellField } from './shell';
 
 describe('k-NN field', () => {
   // dense samples on the dayside, value = log10(2) everywhere
@@ -15,7 +16,8 @@ describe('k-NN field', () => {
   const n = pts.length / 3;
   const s = { hash: new SpatialHash(Float64Array.from(pts), 2), values: new Float64Array(n).fill(Math.log10(2)),
     intervals: Float64Array.from({ length: n }, (_, i) => i % 50), n };
-  const out = knnField(s, 'Np_ratio', 'median', ['XZ', 'YZ'], b, { k: 20, cap: 2, factor: 2, minNeff: 5, useNeff: true });
+  const out = knnField(s, 'Np_ratio', 'median', ['XZ', 'YZ'], b, { k: 20, cap: 2, factor: 2, minNeff: 5, useNeff: true },
+    undefined, undefined, 0.37);
 
   it('fills the dayside sheath and leaves the unsampled flanks NaN', () => {
     const at = (x: number, z: number) => {
@@ -31,6 +33,16 @@ describe('k-NN field', () => {
     expect(out.shellValues.length).toBe(grid.nCells);
     const [, nt, nphi] = grid.spatialShape;
     expect(out.shellValues[(5 * nt + 0) * nphi + 0]).toBeCloseTo(Math.log10(2), 6);  // mid-sheath, subsolar
+  });
+  it('evaluates the fine shell at the requested depth', () => {
+    expect(out.shell.values).toHaveLength(SHELL_GRID.nTheta * SHELL_GRID.nPhi);
+    expect(out.shell.values[0]).toBeCloseTo(Math.log10(2), 6);  // theta 1 deg: sampled dayside
+    expect(out.shell.flags[(SHELL_GRID.nTheta - 1) * SHELL_GRID.nPhi]).toBe(FLAG.EMPTY);  // 119 deg: no samples
+  });
+  it('a shell alone matches the shell computed with the planes', () => {
+    const alone = shellField(knnNode(s, 'Np_ratio', 'median', { k: 20, cap: 2, factor: 2, minNeff: 5, useNeff: true }), 0.37, b);
+    expect(alone.values).toEqual(out.shell.values);
+    expect(alone.flags).toEqual(out.shell.flags);
   });
   it('computes one field per requested plane', () => {
     expect(out.fields.map((f) => f.plane)).toEqual(['XZ', 'YZ']);

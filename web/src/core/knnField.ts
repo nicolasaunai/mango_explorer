@@ -6,6 +6,7 @@ import { normalizedCoords } from './geometry';
 import { FLAG, type ProfilePoint, type Stat, isLogScale } from './compute';
 import { SpatialHash, framePosition, knnAt, positionAt, type KnnResult } from './knn';
 import { voxelKnnAt, type VoxelSet } from './voxels';
+import { shellField } from './shell';
 
 export type Plane = 'XY' | 'XZ' | 'YZ';
 export const FIELD_N = 128; // 0.5 R_E on a 64 R_E plane
@@ -62,10 +63,11 @@ export type PlaneField = { plane: Plane; values: Float32Array; flags: Uint8Array
 /** What a node evaluates to: a colour-space value, a reliability flag, and its profile entry. */
 export type NodeValue = { v: number; flag: number; q25: number; q50: number; q75: number; n: number };
 
-/** Evaluate the slice planes, every depth shell and the Sun-Earth-line profile with one node function.
- * Shell values use the grid's cell layout ((D, theta, phi) row-major), one node per cell centre. */
+/** Evaluate the slice planes, every depth shell, the fine shell at depth `shellD` and the Sun-Earth-line
+ * profile with one node function. `shellValues` use the grid's cell layout ((D, theta, phi) row-major),
+ * one node per cell centre; they set the colour range, so it does not change when the depth moves. */
 export function nodeField(evaluate: (p: [number, number, number]) => NodeValue, planes: Plane[],
-  b: Boundaries, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS) {
+  b: Boundaries, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS, shellD = 0.5) {
   const thetaMax = g.thetaEdges[g.thetaEdges.length - 1];
   const step = (2 * FIELD_HALF) / FIELD_N;
   const fields: PlaneField[] = planes.map((plane) => {
@@ -103,27 +105,37 @@ export function nodeField(evaluate: (p: [number, number, number]) => NodeValue, 
     const r = evaluate(positionAt((d0 + d1) / 2, 0, 0, b));
     profile.push({ d0, d1, q25: r.q25, q50: r.q50, q75: r.q75, n: Number.isFinite(r.q50) ? r.n : 0 });
   }
-  return { fields, shellValues, shellFlags, profile };
+  return { fields, shellValues, shellFlags, shell: shellField(evaluate, shellD, b), profile };
+}
+
+/** Node function of the k-NN quantiles over the (sub-sampled) samples. */
+export function knnNode(s: KnnSamples, q: QuantityName, stat: Stat, o: KnnOptions, g: Grid = defaultGrid) {
+  return (p: [number, number, number]): NodeValue => {
+    const r = knnAt(s.hash, s.values, s.intervals, p, o.k, o.cap, o.factor);
+    return { v: knnValue(r, q, stat, g), flag: knnFlag(r, o.minNeff, o.useNeff), q25: r.q25, q50: r.median, q75: r.q75, n: r.n };
+  };
+}
+
+/** Node function of the k-NN means over the voxel sums of the full data. */
+export function voxelNode(v: VoxelSet, q: QuantityName, stat: Stat, o: { k: number; cap: number; factor: number },
+  g: Grid = defaultGrid) {
+  const log = g.isLog(q);
+  return (p: [number, number, number]): NodeValue => {
+    const r = voxelKnnAt(v, p, o.k, o.cap, o.factor, stat === 'wmean', g);
+    const axis = log ? Math.log10(r.value) : r.value;
+    return { v: axis, flag: Number.isFinite(axis) ? FLAG.OK : FLAG.EMPTY, q25: NaN, q50: axis, q75: NaN, n: r.n };
+  };
 }
 
 /** k-NN quantiles over the (sub-sampled) samples. */
 export function knnField(s: KnnSamples, q: QuantityName, stat: Stat, planes: Plane[],
-  b: Boundaries, o: KnnOptions, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS) {
-  const f = nodeField((p) => {
-    const r = knnAt(s.hash, s.values, s.intervals, p, o.k, o.cap, o.factor);
-    return { v: knnValue(r, q, stat, g), flag: knnFlag(r, o.minNeff, o.useNeff), q25: r.q25, q50: r.median, q75: r.q75, n: r.n };
-  }, planes, b, g, offsets);
-  return { ...f, log: isLogScale(q, stat, g) };
+  b: Boundaries, o: KnnOptions, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS, shellD = 0.5) {
+  return { ...nodeField(knnNode(s, q, stat, o, g), planes, b, g, offsets, shellD), log: isLogScale(q, stat, g) };
 }
 
 /** k-NN means over the voxel sums of the full data. */
 export function voxelField(v: VoxelSet, q: QuantityName, stat: Stat, planes: Plane[],
-  b: Boundaries, o: { k: number; cap: number; factor: number }, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS) {
-  const log = g.isLog(q);
-  const f = nodeField((p) => {
-    const r = voxelKnnAt(v, p, o.k, o.cap, o.factor, stat === 'wmean', g);
-    const axis = log ? Math.log10(r.value) : r.value;
-    return { v: axis, flag: Number.isFinite(axis) ? FLAG.OK : FLAG.EMPTY, q25: NaN, q50: axis, q75: NaN, n: r.n };
-  }, planes, b, g, offsets);
-  return { ...f, log };
+  b: Boundaries, o: { k: number; cap: number; factor: number }, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS,
+  shellD = 0.5) {
+  return { ...nodeField(voxelNode(v, q, stat, o, g), planes, b, g, offsets, shellD), log: g.isLog(q) };
 }

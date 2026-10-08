@@ -30,7 +30,8 @@ export const ViewState = z.object({
   view: z.enum(VIEWS),
   layers: z.array(z.enum(LAYERS)),
   lut: z.enum(LUT_NAMES as [LutName, ...LutName[]]),
-  shell: z.number().int().min(0).max(grid.spatialShape[0] - 1),
+  /** depth D_msh of the shell shown in 3D and on the theta-phi map: 0 magnetopause, 1 bow shock */
+  depth: z.number().min(0).max(1),
   probe: z.number().int().min(-1).max(grid.nCells - 1),
   range: z.tuple([z.number(), z.number()]).nullable(),
   pinA: z.object({ clock: bins(N_CLOCK), cone: bins(N_CONE), ma: bins(N_MA) }).nullable(),
@@ -56,7 +57,7 @@ export const DEFAULT_STATE: ViewState = {
   view: 'iso',
   layers: ['mp', 'bs', 'tint', 'slice'],
   lut: 'batlow',
-  shell: 5,
+  depth: 0.55,
   probe: -1,
   range: null,
   pinA: null,
@@ -76,6 +77,9 @@ export const PRESETS: { id: string; label: string; hint: string; state: Partial<
   { id: 'lowmach', label: 'Low Mach', hint: 'M_A < 4', state: { clock: range(N_CLOCK), cone: range(N_CONE), ma: [0] } },
 ];
 
+/** Old links stored the shell as a depth bin index. */
+const binCentre = (i: number) => (Number.isInteger(i) && i >= 0 && i < grid.dEdges.length - 1 ? (grid.dEdges[i] + grid.dEdges[i + 1]) / 2 : undefined);
+
 const list = (a: number[]) => a.join('.');
 const unlist = (s: string | null) => (s ? s.split('.').filter(Boolean).map(Number) : undefined);
 
@@ -83,7 +87,7 @@ export function encodeHash(s: ViewState): string {
   const p = new URLSearchParams({
     f: s.frame, clk: list(s.clock), cone: list(s.cone), ma: list(s.ma),
     q: s.quantity, st: s.stat, pl: s.planes.join('.'), v: s.view, ly: s.layers.join('.'),
-    cm: s.lut, sh: String(s.shell),
+    cm: s.lut, d: String(+s.depth.toFixed(3)),
   });
   if (s.probe >= 0) p.set('pr', String(s.probe));
   if (s.range) p.set('cr', s.range.map((x) => +x.toPrecision(5)).join('~'));
@@ -103,7 +107,7 @@ export function decodeHash(hash: string): ViewState {
     planes: p.has('pl') ? (p.get('pl') || '').split('.').filter(Boolean) : undefined, view: p.get('v') ?? undefined,
     layers: p.has('ly') ? (p.get('ly') || '').split('.').filter(Boolean) : undefined,
     lut: p.get('cm') ?? undefined,
-    shell: p.has('sh') ? Number(p.get('sh')) : undefined,
+    depth: p.has('d') ? Number(p.get('d')) : p.has('sh') ? binCentre(Number(p.get('sh'))) : undefined,
     probe: p.has('pr') ? Number(p.get('pr')) : undefined,
     range: p.has('cr') ? p.get('cr')!.split('~').map(Number) : undefined,
     pinA: p.has('pa') ? (([clock, cone, ma]) => ({ clock: unlist(clock), cone: unlist(cone), ma: unlist(ma) }))(p.get('pa')!.split('~')) : undefined,

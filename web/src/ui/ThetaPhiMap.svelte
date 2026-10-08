@@ -1,29 +1,30 @@
 <script lang="ts">
   // The statistic on one D_msh shell, unrolled: azimuth phi across, angle from the Sun-Earth line down.
+  // The same shell is drawn in 3D (layer "shells"); one depth control moves both.
   import { app, patch } from '../state/app.svelte';
   import { display } from '../state/display.svelte';
   import { FLAG } from '../core/compute';
   import { grid } from '../core/grid';
+  import { cellBounds } from '../core/geometry';
+  import { depthBin, shellCellAt, SHELL_GRID } from '../core/shell';
   import { lutBytes, lutColor } from '../render/lut';
 
-  const [nd, nt, nphi] = grid.spatialShape;
+  const W = 288, H = 120, TH_MAX = SHELL_GRID.thetaMax;
   let canvas: HTMLCanvasElement;
 
   $effect(() => {
-    const r = display.shown, ctx = canvas?.getContext('2d');
+    const r = display.shown, s = display.shell, ctx = canvas?.getContext('2d');
     if (!ctx) return;
-    const W = canvas.width, H = canvas.height, cw = W / nphi, ch = H / nt;
-    const bytes = lutBytes(r?.lut ?? app.lut), [lo, hi] = r?.range ?? [0, 1];
     ctx.clearRect(0, 0, W, H);
-    if (!r) return;
-    for (let j = 0; j < nt; j++)
-      for (let k = 0; k < nphi; k++) {
-        const at = (app.shell * nt + j) * nphi + k;
-        const vals = r.shell?.values ?? r.values, flags = r.shell?.flags ?? r.flags;  // k-NN shells share the cell layout
-        const f = flags[at];
+    if (!r || !s) return;
+    const bytes = lutBytes(r.lut), [lo, hi] = r.range;
+    const cw = W / s.nPhi, ch = H / s.nTheta;
+    for (let j = 0; j < s.nTheta; j++)
+      for (let k = 0; k < s.nPhi; k++) {
+        const at = j * s.nPhi + k, f = s.flags[at];
         const x = k * cw, y = j * ch;
         if (f === FLAG.EMPTY) continue;
-        ctx.fillStyle = lutColor(bytes, (vals[at] - lo) / (hi - lo));
+        ctx.fillStyle = lutColor(bytes, (s.values[at] - lo) / (hi - lo));
         ctx.fillRect(x, y, cw + 0.5, ch + 0.5);
         if (f === FLAG.WEAK) {
           ctx.fillStyle = 'rgba(58,70,85,0.75)';
@@ -32,32 +33,41 @@
           ctx.beginPath(); ctx.moveTo(x, y + ch); ctx.lineTo(x + cw, y); ctx.stroke();
         }
       }
-    if (app.probe >= 0 && Math.floor(app.probe / (nt * nphi)) === app.shell) {
-      const j = Math.floor(app.probe / nphi) % nt, k = app.probe % nphi;
-      ctx.strokeStyle = '#D7DEE6'; ctx.lineWidth = 2;
-      ctx.strokeRect(k * cw + 1, j * ch + 1, cw - 2, ch - 2);
+    if (app.probe >= 0) {
+      const b = cellBounds(app.probe);
+      if (depthBin(app.depth) === depthBin((b.d[0] + b.d[1]) / 2)) {
+        ctx.strokeStyle = '#D7DEE6'; ctx.lineWidth = 2;
+        ctx.strokeRect((b.phi[0] / 360) * W + 1, (b.theta[0] / TH_MAX) * H + 1,
+          ((b.phi[1] - b.phi[0]) / 360) * W - 2, ((b.theta[1] - b.theta[0]) / TH_MAX) * H - 2);
+      }
     }
   });
 
   function pick(e: MouseEvent) {
+    const s = display.shell;
+    if (!s) return;
     const b = canvas.getBoundingClientRect();
-    const k = Math.floor(((e.clientX - b.left) / b.width) * nphi), j = Math.floor(((e.clientY - b.top) / b.height) * nt);
-    const cell = (app.shell * nt + j) * nphi + k;
-    const s = display.shown;
-    if (s && (s.shell?.flags ?? s.flags)[cell] !== FLAG.EMPTY) patch({ probe: cell });
+    const u = (e.clientX - b.left) / b.width, v = (e.clientY - b.top) / b.height;
+    const k = Math.min(s.nPhi - 1, Math.floor(u * s.nPhi)), j = Math.min(s.nTheta - 1, Math.floor(v * s.nTheta));
+    if (s.flags[j * s.nPhi + k] === FLAG.EMPTY) return;
+    const cell = shellCellAt(app.depth, v * TH_MAX, u * 360);
+    if (cell !== null) patch({ probe: cell });
   }
   const pgsm = $derived(app.frame !== 'GSM');
+  const bin = $derived(depthBin(app.depth));
+  const depthLabel = $derived(app.source === 'knn' ? `D = ${app.depth.toFixed(2)}`
+    : `${grid.dEdges[bin].toFixed(1)}–${grid.dEdges[bin + 1].toFixed(1)}`);
 </script>
 
 <div class="view">
   <div class="head">
-    <span class="eyebrow" title="The map unrolls one depth layer of the magnetosheath: D = 0 at the magnetopause, 1 at the bow shock. Azimuth across, angle from the Sun–Earth line down. Only this map changes.">Depth D<sub>msh</sub> {grid.dEdges[app.shell].toFixed(1)}–{grid.dEdges[app.shell + 1].toFixed(1)}</span>
-    <input type="range" min="0" max={nd - 1} value={app.shell} aria-label="Shell depth"
-      oninput={(e) => patch({ shell: Number((e.currentTarget as HTMLInputElement).value) })} />
+    <span class="eyebrow" title="The map unrolls one depth layer of the magnetosheath: D = 0 at the magnetopause, 1 at the bow shock. Azimuth across, angle from the Sun–Earth line down. The same layer is drawn in 3D with the shells layer. Binned statistics show the depth bin that holds D.">Depth D<sub>msh</sub> {depthLabel}</span>
+    <input type="range" min="0" max="1" step="0.01" value={app.depth} aria-label="Shell depth"
+      oninput={(e) => patch({ depth: Number((e.currentTarget as HTMLInputElement).value) })} />
   </div>
   <div class="plot">
-    <span class="yl">θ 0°</span><span class="yl bottom">120°</span>
-    <canvas bind:this={canvas} width={nphi * 12} height={nt * 6} onclick={pick} aria-label="Map of the selected shell: azimuth across, angle from the Sun-Earth line down. Click a cell to inspect it."></canvas>
+    <span class="yl">θ 0°</span><span class="yl bottom">{TH_MAX}°</span>
+    <canvas bind:this={canvas} width={W} height={H} onclick={pick} aria-label="Map of the selected shell: azimuth across, angle from the Sun-Earth line down. Click a cell to inspect it."></canvas>
     <div class="xl"><span>0° +Y</span><span>90° +Z{pgsm ? ' (IMF)' : ''}</span><span>180° −Y</span><span>270° −Z</span><span>360°</span></div>
   </div>
 </div>

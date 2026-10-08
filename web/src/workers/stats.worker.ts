@@ -1,6 +1,7 @@
 // Sums the selected condition bins of a cube and reduces them to per-cell statistics.
 import { CubeView, SampleTable, httpFetcher, loadManifest, type FetchBytes, type Manifest, type QueryResult, type Selection } from '../core/atlas';
-import { buildSamples, knnField, voxelField, type KnnSamples } from '../core/knnField';
+import { buildSamples, knnField, knnNode, voxelField, voxelNode, type KnnSamples } from '../core/knnField';
+import { shellField } from '../core/shell';
 import { VoxelFrame, voxelKnnAt, type VoxelSet } from '../core/voxels';
 import { isVoxelStat } from '../core/compute';
 import { DISPLAY_BOUNDARIES } from '../core/display';
@@ -9,6 +10,7 @@ import { cellFlags, cellSpread, cellValues, depthProfile, robustRange } from '..
 import { grid, type FrameName, type QuantityName } from '../core/grid';
 import { histQuantile } from '../core/stats';
 import type { StatsReply, StatsRequest } from './protocol';
+import type { Selection as Sel } from '../core/atlas';
 
 let fetchBytes: FetchBytes;
 let manifest: Manifest;
@@ -36,6 +38,33 @@ function cube(frame: FrameName) {
   return cubes.get(frame)!;
 }
 
+type KnnParams = { frame: FrameName; quantity: QuantityName; stat: string; selection: Sel; k: number; cap: number };
+
+/** Voxel sums of the selection (full-data k-NN means), cached for the probe. */
+async function voxelsFor(m: KnnParams) {
+  if (!voxelFrames.has(m.frame)) voxelFrames.set(m.frame, VoxelFrame.load(manifest, m.frame, fetchBytes));
+  const vf = await voxelFrames.get(m.frame)!;
+  const key = JSON.stringify(['vox', m.frame, m.quantity, m.selection, m.cap]);
+  if (voxCache?.key !== key) voxCache = { key, v: await vf.select(m.quantity, m.selection, m.cap / 2), k: m.k, cap: m.cap, weighted: true };
+  voxCache.k = m.k; voxCache.weighted = m.stat === 'wmean';
+  knnCache = null;
+  return voxCache;
+}
+
+/** Indexed sample positions of the selection (k-NN quantiles), cached for the probe. */
+async function samplesFor(m: KnnParams) {
+  voxCache = null;
+  samples ??= SampleTable.load(manifest, fetchBytes);
+  const table = await samples;
+  const key = JSON.stringify([m.frame, m.quantity, m.selection, m.cap]);
+  if (knnCache?.key !== key) {
+    const values = await table.quantity(m.quantity);
+    knnCache = { key, s: buildSamples(table, values, m.frame, m.selection, m.cap), k: m.k, kSearched: 0, cap: m.cap };
+  }
+  knnCache.k = m.k; knnCache.kSearched = searchedK(m.k);
+  return knnCache;
+}
+
 self.onmessage = async (e: MessageEvent<StatsRequest>) => {
   const m = e.data;
   try {
@@ -58,44 +87,43 @@ self.onmessage = async (e: MessageEvent<StatsRequest>) => {
     } else if (m.type === 'knn' && isVoxelStat(m.stat)) {
       // full data: k-NN means from the voxel sums
       const t0 = performance.now();
-      if (!voxelFrames.has(m.frame)) voxelFrames.set(m.frame, VoxelFrame.load(manifest, m.frame, fetchBytes));
-      const vf = await voxelFrames.get(m.frame)!;
-      const key = JSON.stringify(['vox', m.frame, m.quantity, m.selection, m.cap]);
-      if (voxCache?.key !== key) voxCache = { key, v: await vf.select(m.quantity, m.selection, m.cap / 2), k: m.k, cap: m.cap, weighted: true };
-      voxCache.k = m.k; voxCache.weighted = m.stat === 'wmean';
-      knnCache = null;
-      const f = voxelField(voxCache.v, m.quantity, m.stat, m.planes, DISPLAY_BOUNDARIES,
-        { k: m.k, cap: m.cap, factor: KNN.search_factor }, undefined, m.offsets);
+      const vc = await voxelsFor(m);
+      const f = voxelField(vc.v, m.quantity, m.stat, m.planes, DISPLAY_BOUNDARIES,
+        { k: m.k, cap: m.cap, factor: KNN.search_factor }, undefined, m.offsets, m.shellD);
       const all = new Float32Array([...f.fields.flatMap((p) => [...p.values]), ...f.shellValues]);
       const flags = new Uint8Array([...f.fields.flatMap((p) => [...p.flags]), ...f.shellFlags]);
       post({
         type: 'knn', id: m.id, frame: m.frame, quantity: m.quantity, stat: m.stat,
-        fields: f.fields, shellValues: f.shellValues, shellFlags: f.shellFlags,
-        profile: f.profile, range: range2(all, flags), nSamples: voxCache.v.total, ms: performance.now() - t0,
+        fields: f.fields, shellValues: f.shellValues, shellFlags: f.shellFlags, shell: f.shell, shellD: m.shellD,
+        profile: f.profile, range: range2(all, flags), nSamples: vc.v.total, ms: performance.now() - t0,
         k: m.k, kSearched: m.k, fraction: 1,
-      }, [...f.fields.flatMap((p) => [p.values.buffer, p.flags.buffer]), f.shellValues.buffer, f.shellFlags.buffer]);
+      }, [...f.fields.flatMap((p) => [p.values.buffer, p.flags.buffer]), f.shellValues.buffer, f.shellFlags.buffer,
+        f.shell.values.buffer, f.shell.flags.buffer]);
     } else if (m.type === 'knn') {
       const t0 = performance.now();
-      voxCache = null;
-      samples ??= SampleTable.load(manifest, fetchBytes);
-      const table = await samples;
-      const key = JSON.stringify([m.frame, m.quantity, m.selection, m.cap]);
-      if (knnCache?.key !== key) {
-        const values = await table.quantity(m.quantity);
-        knnCache = { key, s: buildSamples(table, values, m.frame, m.selection, m.cap), k: m.k, kSearched: 0, cap: m.cap };
-      }
-      const kSearched = searchedK(m.k);
-      knnCache.k = m.k; knnCache.kSearched = kSearched;
+      const kc = await samplesFor(m);
+      const kSearched = kc.kSearched;
       const opts = { k: kSearched, cap: m.cap, factor: KNN.search_factor, minNeff: KNN.min_neff, useNeff: m.useNeff };
-      const f = knnField(knnCache.s, m.quantity, m.stat, m.planes, DISPLAY_BOUNDARIES, opts, undefined, m.offsets);
+      const f = knnField(kc.s, m.quantity, m.stat, m.planes, DISPLAY_BOUNDARIES, opts, undefined, m.offsets, m.shellD);
       const all = new Float32Array([...f.fields.flatMap((p) => [...p.values]), ...f.shellValues]);
       const flags = new Uint8Array([...f.fields.flatMap((p) => [...p.flags]), ...f.shellFlags]);
       post({
         type: 'knn', id: m.id, frame: m.frame, quantity: m.quantity, stat: m.stat,
-        fields: f.fields, shellValues: f.shellValues, shellFlags: f.shellFlags,
-        profile: f.profile, range: range2(all, flags), nSamples: knnCache.s.n, ms: performance.now() - t0,
+        fields: f.fields, shellValues: f.shellValues, shellFlags: f.shellFlags, shell: f.shell, shellD: m.shellD,
+        profile: f.profile, range: range2(all, flags), nSamples: kc.s.n, ms: performance.now() - t0,
         k: m.k, kSearched, fraction: manifest.samples?.fraction ?? 1,
-      }, [...f.fields.flatMap((p) => [p.values.buffer, p.flags.buffer]), f.shellValues.buffer, f.shellFlags.buffer]);
+      }, [...f.fields.flatMap((p) => [p.values.buffer, p.flags.buffer]), f.shellValues.buffer, f.shellFlags.buffer,
+        f.shell.values.buffer, f.shell.flags.buffer]);
+    } else if (m.type === 'knnShell') {
+      // only the shell moved: evaluate it alone with the cached samples
+      const t0 = performance.now();
+      const node = isVoxelStat(m.stat)
+        ? voxelNode((await voxelsFor(m)).v, m.quantity, m.stat, { k: m.k, cap: m.cap, factor: KNN.search_factor })
+        : knnNode((await samplesFor(m)).s, m.quantity, m.stat,
+          { k: searchedK(m.k), cap: m.cap, factor: KNN.search_factor, minNeff: KNN.min_neff, useNeff: m.useNeff });
+      const shell = shellField(node, m.shellD, DISPLAY_BOUNDARIES);
+      post({ type: 'knnShell', id: m.id, shell, shellD: m.shellD, ms: performance.now() - t0 },
+        [shell.values.buffer, shell.flags.buffer]);
     } else if (m.type === 'knnProbe' && voxCache) {
       const r = voxelKnnAt(voxCache.v, m.point, voxCache.k, voxCache.cap, KNN.search_factor, voxCache.weighted);
       const quantity = JSON.parse(voxCache.key)[2] as QuantityName;

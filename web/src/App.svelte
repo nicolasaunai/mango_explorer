@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import ConditionsPanel from './ui/ConditionsPanel.svelte';
   import QuantityPanel from './ui/QuantityPanel.svelte';
   import Viewport from './ui/Viewport.svelte';
   import { app, patch, syncHash } from './state/app.svelte';
   import { data, loadAtlas, selectionOf } from './state/data.svelte';
-  import { runKnn, runQuery } from './state/stats.svelte';
+  import { runKnn, runKnnShell, runQuery } from './state/stats.svelte';
   import Colorbar from './ui/Colorbar.svelte';
   import ThetaPhiMap from './ui/ThetaPhiMap.svelte';
   import DepthProfile from './ui/DepthProfile.svelte';
@@ -21,7 +21,17 @@
   });
   $effect(() => {
     if (data.status !== 'ready' || app.source !== 'knn') return;
-    runKnn(app.frame, app.quantity, app.stat, selectionOf(app), app.planes, app.offsets, app.k, app.cap, app.neff);
+    runKnn(app.frame, app.quantity, app.stat, selectionOf(app), app.planes, app.offsets, app.k, app.cap, app.neff,
+      untrack(() => app.depth));
+  });
+  // moving the depth re-evaluates only the shell, not the planes (the full k-NN query covers the first shell)
+  let lastDepth = app.depth;
+  $effect(() => {
+    const d = app.depth;
+    if (d === lastDepth) return;
+    lastDepth = d;
+    if (data.status !== 'ready' || app.source !== 'knn') return;
+    untrack(() => runKnnShell(app.frame, app.quantity, app.stat, selectionOf(app), app.k, app.cap, app.neff, d));
   });
   $effect(() => {
     if (data.status !== 'ready' || !app.pinA || app.source !== 'bins') return;

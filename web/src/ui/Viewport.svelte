@@ -7,7 +7,8 @@
   import { BOUNDARIES, BOUNDARY_NOTE } from '../state/boundaries';
   import { VIEWS, clockUndefined } from '../state/schema';
   import { grid } from '../core/grid';
-  import { cellAt, cellCenter } from '../core/geometry';
+  import { cellAt, cellCenter, normalizedCoords } from '../core/geometry';
+  import { shellCellAt } from '../core/shell';
   import Inspector from './Inspector.svelte';
   import { display } from '../state/display.svelte';
   import { exportPng } from './exportPng';
@@ -34,7 +35,11 @@
   onMount(() => {
     try {
       view = new SceneView(canvas);
-      view.onPick = (p) => patch({ probe: cellAt(p, BOUNDARIES) ?? -1 });
+      view.onPick = (p, onShell) => {
+        // on the shell, the depth is the shell's (the clicked point sits on a chord of the curved surface)
+        const n = normalizedCoords(p, BOUNDARIES);
+        patch({ probe: (onShell ? shellCellAt(app.depth, n.thetaDeg, n.phiDeg) : cellAt(p, BOUNDARIES)) ?? -1 });
+      };
       view.onPlaneDrag = (plane, offset, done) => {
         dragging = done ? null : { plane, offset };
         patch({ offsets: { ...app.offsets, [plane]: offset } });
@@ -55,10 +60,14 @@
       showBs: app.layers.includes('bs'),
       tint: app.layers.includes('tint'),
       shells: app.layers.includes('shells'),
-      shellD: (grid.dEdges[app.shell] + grid.dEdges[app.shell + 1]) / 2,
+      shellD: app.depth,
       zgsm: app.layers.includes('zgsm'),
       rMp: BOUNDARIES.rMp, rBs: BOUNDARIES.rBs,
     });
+  });
+  $effect(() => {
+    const d = display.shown, s = display.shell;
+    if (view && d) view.setShell(s, d.range, d.lut);
   });
   $effect(() => view?.setView(app.view as CameraPreset));
   $effect(() => { const o = { ...app.offsets }; view?.setOffsets(o); });

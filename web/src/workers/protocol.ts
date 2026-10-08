@@ -3,13 +3,16 @@ import type { FrameName, QuantityName } from '../core/grid';
 import type { ProfilePoint, Stat } from '../core/compute';
 import type { Plane, PlaneField, PlaneOffsets } from '../core/knnField';
 import type { KnnResult } from '../core/knn';
+import type { ShellGrid } from '../core/shell';
 
 export type StatsRequest =
   | { type: 'init'; id: number; base: string }
   | { type: 'query'; id: number; slot: Slot; frame: FrameName; quantity: QuantityName; stat: Stat; selection: Selection; profileThetaMax: number; useNeff: boolean }
   | { type: 'probe'; id: number; cell: number }
   | { type: 'knn'; id: number; frame: FrameName; quantity: QuantityName; stat: Stat; selection: Selection;
-      planes: Plane[]; offsets: PlaneOffsets; k: number; cap: number; useNeff: boolean }
+      planes: Plane[]; offsets: PlaneOffsets; k: number; cap: number; useNeff: boolean; shellD: number }
+  | { type: 'knnShell'; id: number; frame: FrameName; quantity: QuantityName; stat: Stat; selection: Selection;
+      k: number; cap: number; useNeff: boolean; shellD: number }
   | { type: 'knnProbe'; id: number; point: [number, number, number]; cell: number };
 
 export type Slot = 'A' | 'B';
@@ -27,14 +30,18 @@ export type KnnReply = {
   type: 'knn'; id: number; frame: FrameName; quantity: QuantityName; stat: Stat;
   /** slice fields, and every depth shell in the grid cell layout */
   fields: PlaneField[]; shellValues: Float32Array; shellFlags: Uint8Array;
+  /** the shell at depth shellD on the fine (theta, phi) grid */
+  shell: ShellGrid; shellD: number;
   profile: ProfilePoint[]; range: [number, number]; nSamples: number; ms: number;
   /** k as requested (neighbours in the full dataset) and as searched in the random sample */
   k: number; kSearched: number; fraction: number;
 };
 export type KnnProbeReply = { type: 'knnProbe'; id: number; cell: number; quantity: QuantityName; result: KnnResult; values: number[];
   k: number; kSearched: number; /** set for full-data voxel means: number of voxels used */ voxels?: number };
+export type KnnShellReply = { type: 'knnShell'; id: number; shell: ShellGrid; shellD: number; ms: number };
 export type StatsReply =
   | { type: 'ready'; id: number; manifest: Manifest }
+  | KnnShellReply
   | KnnReply
   | KnnProbeReply
   | QueryReply

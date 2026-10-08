@@ -7,6 +7,8 @@ import { imfDirection, zGsmDirection } from '../core/frames';
 import { graticule, revolutionGeometry, toThree, type RadiusFn } from './geometry';
 import { PALETTE, boundaryMaterial, earthMaterial, label } from './materials';
 import { SliceLayer, normalOf, type Plane } from './slice';
+import { ShellSurface } from './shell';
+import type { ShellGrid } from '../core/shell';
 import { normalizedCoords } from '../core/geometry';
 import type { LutName } from './lut';
 
@@ -17,8 +19,9 @@ export type SceneInputs = {
   showMp: boolean;
   showBs: boolean;
   tint: boolean;
+  /** draw the coloured depth shell (data come through setShell) */
   shells: boolean;
-  /** depth of the shell drawn when `shells` is on */
+  /** its depth D_msh */
   shellD: number;
   /** draw where Z_GSM (the dipole axis) points for the selected clock sector; off by default */
   zgsm: boolean;
@@ -38,7 +41,7 @@ export class SceneView {
   private bs?: THREE.Group;
   private bsMat = boundaryMaterial(PALETTE.bs, 0.07, 0.6);
   private mpMat = boundaryMaterial(PALETTE.mp, 0.05, 0.55);
-  private shell?: THREE.LineSegments;
+  private shell = new ShellSurface(120);
   private imf = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(21, 0, 0), 6.5, PALETTE.imf, 1.5, 0.8);
   private imfGhost = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(21, 0, 0), 6.5, PALETTE.imf, 1.5, 0.8);
   private zArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 7, PALETTE.fg, 1.2, 0.6);
@@ -49,8 +52,8 @@ export class SceneView {
   readonly slices: Record<Plane, SliceLayer> = { XY: new SliceLayer(), XZ: new SliceLayer(), YZ: new SliceLayer() };
   private marker = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 12), new THREE.MeshBasicMaterial({ color: PALETTE.fg }));
   private raycaster = new THREE.Raycaster();
-  /** Called with the physics position (X, Y, Z) of a click on the slice. */
-  onPick: ((p: [number, number, number]) => void) | null = null;
+  /** Called with the physics position (X, Y, Z) of a click on a slice or on the depth shell. */
+  onPick: ((p: [number, number, number], onShell: boolean) => void) | null = null;
   /** Called while a slice is dragged along its normal (done = false) and on release (done = true). */
   onPlaneDrag: ((plane: Plane, offset: number, done: boolean) => void) | null = null;
 
@@ -72,6 +75,7 @@ export class SceneView {
       s.setPlane(plane);
       this.scene.add(s.mesh);
     }
+    this.scene.add(this.shell.group);
     this.scene.add(this.marker);
     this.marker.visible = false;
     this.listenForPicks();
@@ -84,11 +88,15 @@ export class SceneView {
     return this.raycaster.ray;
   }
 
-  /** The nearest visible slice under the pointer, only where it shows the magnetosheath. */
-  private sliceUnder(e: PointerEvent): { slice: SliceLayer; point: THREE.Vector3 } | null {
+  /** The nearest visible slice or shell under the pointer; slices count only where they show the
+   * magnetosheath. `slice` is null when the shell is in front. */
+  private pickUnder(e: PointerEvent): { slice: SliceLayer | null; point: THREE.Vector3 } | null {
     this.rayAt(e);
     const visible = Object.values(this.slices).filter((s) => s.mesh.visible);
-    for (const hit of this.raycaster.intersectObjects(visible.map((s) => s.mesh), false)) {
+    const shellOn = this.shell.group.visible && this.shell.mesh.visible;
+    const meshes = [...visible.map((s) => s.mesh), ...(shellOn ? [this.shell.mesh] : [])];
+    for (const hit of this.raycaster.intersectObjects(meshes, false)) {
+      if (hit.object === this.shell.mesh) return { slice: null, point: hit.point.clone() };
       const slice = visible.find((s) => s.mesh === hit.object)!;
       const p: [number, number, number] = [hit.point.x, -hit.point.z, hit.point.y];
       if (!this.lastShape) continue;
@@ -96,6 +104,12 @@ export class SceneView {
       if (d >= 0 && d <= 1 && thetaDeg < 120) return { slice, point: hit.point.clone() };
     }
     return null;
+  }
+
+  /** The slice under the pointer, if no shell is in front of it. */
+  private sliceUnder(e: PointerEvent) {
+    const hit = this.pickUnder(e);
+    return hit?.slice ? { slice: hit.slice, point: hit.point } : null;
   }
 
   private listenForPicks() {
@@ -141,8 +155,8 @@ export class SceneView {
         if (d.moved) { this.onPlaneDrag?.(d.slice.plane, d.slice.offset, true); return; }
       }
       if (!click || Math.hypot(e.clientX - click.x, e.clientY - click.y) > 4) return;
-      const hit = this.sliceUnder(e);
-      if (hit) this.onPick?.([hit.point.x, -hit.point.z, hit.point.y]);
+      const hit = this.pickUnder(e);
+      if (hit) this.onPick?.([hit.point.x, -hit.point.z, hit.point.y], !hit.slice);
     });
   }
 
@@ -166,6 +180,12 @@ export class SceneView {
       }
       s.mesh.visible = on;
     }
+    this.requestRender();
+  }
+
+  /** Colour the depth shell with its (theta, phi) grid. */
+  setShell(grid: ShellGrid | null, range: [number, number], lut: LutName) {
+    this.shell.setGrid(grid, range, lut);
     this.requestRender();
   }
 
@@ -226,12 +246,7 @@ export class SceneView {
   private shellD = NaN;
   private buildShell(dMsh: number) {
     if (!this.lastShape) return;
-    const [rMp, rBs] = this.lastShape;
-    if (this.shell) { this.scene.remove(this.shell); this.shell.geometry.dispose(); }
-    const r: RadiusFn = (t) => rMp(t) + dMsh * (rBs(t) - rMp(t));
-    this.shell = new THREE.LineSegments(graticule(r, revolutionGeometry(r, X_MIN + 2, 8, 8).userData.tMax, 10),
-      new THREE.LineBasicMaterial({ color: PALETTE.fg, transparent: true, opacity: 0.22, depthWrite: false }));
-    this.scene.add(this.shell);
+    this.shell.setShape(this.lastShape[0], this.lastShape[1], dMsh);
     this.shellD = dMsh;
   }
 
@@ -271,12 +286,13 @@ export class SceneView {
     if (!this.lastShape || this.lastShape[0] !== p.rMp || this.lastShape[1] !== p.rBs) {
       this.buildBoundaries(p.rMp, p.rBs);
       this.lastShape = [p.rMp, p.rBs];
+      this.shellD = NaN;  // the shell sits between the boundaries: rebuild it too
     }
     this.setZLabel(p.frame);
     this.mp!.visible = p.showMp;
     this.bs!.visible = p.showBs;
     if (p.shells && p.shellD !== this.shellD) this.buildShell(p.shellD);
-    if (this.shell) this.shell.visible = p.shells;
+    this.shell.group.visible = p.shells;
 
     const clock = p.clockDeg ?? 0;
     const b = toThree(imfDirection(p.frame, clock, p.coneDeg, 1)).normalize();
