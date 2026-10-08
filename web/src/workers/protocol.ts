@@ -9,7 +9,7 @@ export type StatsRequest =
   | { type: 'query'; id: number; slot: Slot; frame: FrameName; quantity: QuantityName; stat: Stat; selection: Selection; profileThetaMax: number; useNeff: boolean }
   | { type: 'probe'; id: number; cell: number }
   | { type: 'knn'; id: number; frame: FrameName; quantity: QuantityName; stat: Stat; selection: Selection;
-      planes: Plane[]; offsets: PlaneOffsets; shell: number; k: number; cap: number; useNeff: boolean }
+      planes: Plane[]; offsets: PlaneOffsets; k: number; cap: number; useNeff: boolean }
   | { type: 'knnProbe'; id: number; point: [number, number, number]; cell: number };
 
 export type Slot = 'A' | 'B';
@@ -24,7 +24,8 @@ export type ProbeReply = {
   spacecraft: { name: string; n: number }[];
 };
 export type KnnReply = {
-  type: 'knn'; id: number; frame: FrameName; quantity: QuantityName; stat: Stat; shell: number;
+  type: 'knn'; id: number; frame: FrameName; quantity: QuantityName; stat: Stat;
+  /** slice fields, and every depth shell in the grid cell layout */
   fields: PlaneField[]; shellValues: Float32Array; shellFlags: Uint8Array;
   profile: ProfilePoint[]; range: [number, number]; nSamples: number; ms: number;
   /** k as requested (neighbours in the full dataset) and as searched in the random sample */

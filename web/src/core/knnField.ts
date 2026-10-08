@@ -62,8 +62,9 @@ export type PlaneField = { plane: Plane; values: Float32Array; flags: Uint8Array
 /** What a node evaluates to: a colour-space value, a reliability flag, and its profile entry. */
 export type NodeValue = { v: number; flag: number; q25: number; q50: number; q75: number; n: number };
 
-/** Evaluate the slice planes, the shell map and the Sun-Earth-line profile with one node function. */
-export function nodeField(evaluate: (p: [number, number, number]) => NodeValue, planes: Plane[], shell: number,
+/** Evaluate the slice planes, every depth shell and the Sun-Earth-line profile with one node function.
+ * Shell values use the grid's cell layout ((D, theta, phi) row-major), one node per cell centre. */
+export function nodeField(evaluate: (p: [number, number, number]) => NodeValue, planes: Plane[],
   b: Boundaries, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS) {
   const thetaMax = g.thetaEdges[g.thetaEdges.length - 1];
   const step = (2 * FIELD_HALF) / FIELD_N;
@@ -81,16 +82,19 @@ export function nodeField(evaluate: (p: [number, number, number]) => NodeValue, 
     return { plane, values, flags };
   });
 
-  const [, nt, nphi] = g.spatialShape;
-  const shellValues = new Float32Array(nt * nphi).fill(NaN), shellFlags = new Uint8Array(nt * nphi);
-  const dMid = (g.dEdges[shell] + g.dEdges[shell + 1]) / 2;
-  for (let j = 0; j < nt; j++)
-    for (let k = 0; k < nphi; k++) {
-      const th = (g.thetaEdges[j] + g.thetaEdges[j + 1]) / 2, ph = (g.phiEdges[k] + g.phiEdges[k + 1]) / 2;
-      const r = evaluate(positionAt(dMid, th, ph, b));
-      shellValues[j * nphi + k] = r.v;
-      shellFlags[j * nphi + k] = r.flag;
-    }
+  const [nd, nt, nphi] = g.spatialShape;
+  const shellValues = new Float32Array(g.nCells).fill(NaN), shellFlags = new Uint8Array(g.nCells);
+  for (let i = 0; i < nd; i++) {
+    const dMid = (g.dEdges[i] + g.dEdges[i + 1]) / 2;
+    for (let j = 0; j < nt; j++)
+      for (let k = 0; k < nphi; k++) {
+        const th = (g.thetaEdges[j] + g.thetaEdges[j + 1]) / 2, ph = (g.phiEdges[k] + g.phiEdges[k + 1]) / 2;
+        const r = evaluate(positionAt(dMid, th, ph, b));
+        const c = (i * nt + j) * nphi + k;
+        shellValues[c] = r.v;
+        shellFlags[c] = r.flag;
+      }
+  }
 
   const profile: ProfilePoint[] = [];
   const nProf = 20;
@@ -103,23 +107,23 @@ export function nodeField(evaluate: (p: [number, number, number]) => NodeValue, 
 }
 
 /** k-NN quantiles over the (sub-sampled) samples. */
-export function knnField(s: KnnSamples, q: QuantityName, stat: Stat, planes: Plane[], shell: number,
+export function knnField(s: KnnSamples, q: QuantityName, stat: Stat, planes: Plane[],
   b: Boundaries, o: KnnOptions, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS) {
   const f = nodeField((p) => {
     const r = knnAt(s.hash, s.values, s.intervals, p, o.k, o.cap, o.factor);
     return { v: knnValue(r, q, stat, g), flag: knnFlag(r, o.minNeff, o.useNeff), q25: r.q25, q50: r.median, q75: r.q75, n: r.n };
-  }, planes, shell, b, g, offsets);
+  }, planes, b, g, offsets);
   return { ...f, log: isLogScale(q, stat, g) };
 }
 
 /** k-NN means over the voxel sums of the full data. */
-export function voxelField(v: VoxelSet, q: QuantityName, stat: Stat, planes: Plane[], shell: number,
+export function voxelField(v: VoxelSet, q: QuantityName, stat: Stat, planes: Plane[],
   b: Boundaries, o: { k: number; cap: number; factor: number }, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS) {
   const log = g.isLog(q);
   const f = nodeField((p) => {
     const r = voxelKnnAt(v, p, o.k, o.cap, o.factor, stat === 'wmean', g);
     const axis = log ? Math.log10(r.value) : r.value;
     return { v: axis, flag: Number.isFinite(axis) ? FLAG.OK : FLAG.EMPTY, q25: NaN, q50: axis, q75: NaN, n: r.n };
-  }, planes, shell, b, g, offsets);
+  }, planes, b, g, offsets);
   return { ...f, log };
 }

@@ -18,6 +18,8 @@ export type SceneInputs = {
   showBs: boolean;
   tint: boolean;
   shells: boolean;
+  /** depth of the shell drawn when `shells` is on */
+  shellD: number;
   /** draw where Z_GSM (the dipole axis) points for the selected clock sector; off by default */
   zgsm: boolean;
   rMp: RadiusFn;
@@ -221,6 +223,18 @@ export class SceneView {
     s.add(this.imf, this.imfGhost, this.zArrow);
   }
 
+  private shellD = NaN;
+  private buildShell(dMsh: number) {
+    if (!this.lastShape) return;
+    const [rMp, rBs] = this.lastShape;
+    if (this.shell) { this.scene.remove(this.shell); this.shell.geometry.dispose(); }
+    const r: RadiusFn = (t) => rMp(t) + dMsh * (rBs(t) - rMp(t));
+    this.shell = new THREE.LineSegments(graticule(r, revolutionGeometry(r, X_MIN + 2, 8, 8).userData.tMax, 10),
+      new THREE.LineBasicMaterial({ color: PALETTE.fg, transparent: true, opacity: 0.22, depthWrite: false }));
+    this.scene.add(this.shell);
+    this.shellD = dMsh;
+  }
+
   private zLabel?: THREE.Sprite;
   private setZLabel(frame: FrameName) {
     if (this.zLabel) {
@@ -250,11 +264,7 @@ export class SceneView {
     this.mp = make(rMp, this.mpMat, PALETTE.mp, 0.2, 1);
     this.bs = make(rBs, this.bsMat, PALETTE.bs, 0.15, 2);
     this.scene.add(this.mp, this.bs);
-    if (this.shell) { this.scene.remove(this.shell); this.shell.geometry.dispose(); }
-    const mid: RadiusFn = (t) => rMp(t) + 0.5 * (rBs(t) - rMp(t));
-    this.shell = new THREE.LineSegments(graticule(mid, revolutionGeometry(mid, X_MIN + 2, 8, 8).userData.tMax, 10),
-      new THREE.LineBasicMaterial({ color: PALETTE.fg, transparent: true, opacity: 0.18, depthWrite: false }));
-    this.scene.add(this.shell);
+    this.shellD = NaN;  // rebuilt on the next update
   }
 
   update(p: SceneInputs) {
@@ -265,7 +275,8 @@ export class SceneView {
     this.setZLabel(p.frame);
     this.mp!.visible = p.showMp;
     this.bs!.visible = p.showBs;
-    this.shell!.visible = p.shells;
+    if (p.shells && p.shellD !== this.shellD) this.buildShell(p.shellD);
+    if (this.shell) this.shell.visible = p.shells;
 
     const clock = p.clockDeg ?? 0;
     const b = toThree(imfDirection(p.frame, clock, p.coneDeg, 1)).normalize();

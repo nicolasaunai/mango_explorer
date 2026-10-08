@@ -55,6 +55,7 @@
       showBs: app.layers.includes('bs'),
       tint: app.layers.includes('tint'),
       shells: app.layers.includes('shells'),
+      shellD: (grid.dEdges[app.shell] + grid.dEdges[app.shell + 1]) / 2,
       zgsm: app.layers.includes('zgsm'),
       rMp: BOUNDARIES.rMp, rBs: BOUNDARIES.rBs,
     });

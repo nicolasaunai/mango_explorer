@@ -10,7 +10,7 @@ export type Shown = {
   mode: 'A' | 'B' | 'diff';
   values: Float32Array; flags: Uint8Array; range: [number, number];
   lut: LutName; log: boolean; diverging: boolean;
-  /** k-NN mode: values are a field on the slice plane; the shell map has its own arrays */
+  /** k-NN mode: values are fields on the slice planes; `shell` holds every depth shell (cell layout) */
   field?: { n: number; half: number; planes: PlaneField[] };
   shell?: { values: Float32Array; flags: Uint8Array };
 };

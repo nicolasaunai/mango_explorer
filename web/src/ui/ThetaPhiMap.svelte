@@ -18,9 +18,8 @@
     if (!r) return;
     for (let j = 0; j < nt; j++)
       for (let k = 0; k < nphi; k++) {
-        const c = (app.shell * nt + j) * nphi + k;
-        // k-NN mode: one node per (theta, phi) on the selected shell
-        const vals = r.shell?.values ?? r.values, flags = r.shell?.flags ?? r.flags, at = r.shell ? j * nphi + k : c;
+        const at = (app.shell * nt + j) * nphi + k;
+        const vals = r.shell?.values ?? r.values, flags = r.shell?.flags ?? r.flags;  // k-NN shells share the cell layout
         const f = flags[at];
         const x = k * cw, y = j * ch;
         if (f === FLAG.EMPTY) continue;
@@ -45,14 +44,14 @@
     const k = Math.floor(((e.clientX - b.left) / b.width) * nphi), j = Math.floor(((e.clientY - b.top) / b.height) * nt);
     const cell = (app.shell * nt + j) * nphi + k;
     const s = display.shown;
-    if (s && (s.shell ? s.shell.flags[j * nphi + k] : s.flags[cell]) !== FLAG.EMPTY) patch({ probe: cell });
+    if (s && (s.shell?.flags ?? s.flags)[cell] !== FLAG.EMPTY) patch({ probe: cell });
   }
   const pgsm = $derived(app.frame !== 'GSM');
 </script>
 
 <div class="view">
   <div class="head">
-    <span class="eyebrow">Shell D<sub>msh</sub> {grid.dEdges[app.shell].toFixed(1)}–{grid.dEdges[app.shell + 1].toFixed(1)}</span>
+    <span class="eyebrow" title="The map unrolls one depth layer of the magnetosheath: D = 0 at the magnetopause, 1 at the bow shock. Azimuth across, angle from the Sun–Earth line down. Only this map changes.">Depth D<sub>msh</sub> {grid.dEdges[app.shell].toFixed(1)}–{grid.dEdges[app.shell + 1].toFixed(1)}</span>
     <input type="range" min="0" max={nd - 1} value={app.shell} aria-label="Shell depth"
       oninput={(e) => patch({ shell: Number((e.currentTarget as HTMLInputElement).value) })} />
   </div>
@@ -66,7 +65,7 @@
 <style>
   .view { display: grid; gap: 4px; min-width: 0; }
   .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .head input { width: 45%; accent-color: var(--mp); }
+  .head input { width: 40%; accent-color: var(--mp); }
   .plot { position: relative; padding-left: 34px; }
   canvas { width: 100%; height: 72px; display: block; image-rendering: pixelated; cursor: crosshair; background: repeating-linear-gradient(45deg, transparent 0 5px, color-mix(in srgb, var(--hatch) 30%, transparent) 5px 6px); border: 1px solid var(--rule); }
   .yl { position: absolute; left: 0; top: 0; font: 9.5px var(--f-mono); color: var(--muted); }

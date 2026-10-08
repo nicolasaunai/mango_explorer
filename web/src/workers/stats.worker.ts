@@ -64,12 +64,12 @@ self.onmessage = async (e: MessageEvent<StatsRequest>) => {
       if (voxCache?.key !== key) voxCache = { key, v: await vf.select(m.quantity, m.selection, m.cap / 2), k: m.k, cap: m.cap, weighted: true };
       voxCache.k = m.k; voxCache.weighted = m.stat === 'wmean';
       knnCache = null;
-      const f = voxelField(voxCache.v, m.quantity, m.stat, m.planes, m.shell, DISPLAY_BOUNDARIES,
+      const f = voxelField(voxCache.v, m.quantity, m.stat, m.planes, DISPLAY_BOUNDARIES,
         { k: m.k, cap: m.cap, factor: KNN.search_factor }, undefined, m.offsets);
       const all = new Float32Array([...f.fields.flatMap((p) => [...p.values]), ...f.shellValues]);
       const flags = new Uint8Array([...f.fields.flatMap((p) => [...p.flags]), ...f.shellFlags]);
       post({
-        type: 'knn', id: m.id, frame: m.frame, quantity: m.quantity, stat: m.stat, shell: m.shell,
+        type: 'knn', id: m.id, frame: m.frame, quantity: m.quantity, stat: m.stat,
         fields: f.fields, shellValues: f.shellValues, shellFlags: f.shellFlags,
         profile: f.profile, range: range2(all, flags), nSamples: voxCache.v.total, ms: performance.now() - t0,
         k: m.k, kSearched: m.k, fraction: 1,
@@ -87,11 +87,11 @@ self.onmessage = async (e: MessageEvent<StatsRequest>) => {
       const kSearched = searchedK(m.k);
       knnCache.k = m.k; knnCache.kSearched = kSearched;
       const opts = { k: kSearched, cap: m.cap, factor: KNN.search_factor, minNeff: KNN.min_neff, useNeff: m.useNeff };
-      const f = knnField(knnCache.s, m.quantity, m.stat, m.planes, m.shell, DISPLAY_BOUNDARIES, opts, undefined, m.offsets);
+      const f = knnField(knnCache.s, m.quantity, m.stat, m.planes, DISPLAY_BOUNDARIES, opts, undefined, m.offsets);
       const all = new Float32Array([...f.fields.flatMap((p) => [...p.values]), ...f.shellValues]);
       const flags = new Uint8Array([...f.fields.flatMap((p) => [...p.flags]), ...f.shellFlags]);
       post({
-        type: 'knn', id: m.id, frame: m.frame, quantity: m.quantity, stat: m.stat, shell: m.shell,
+        type: 'knn', id: m.id, frame: m.frame, quantity: m.quantity, stat: m.stat,
         fields: f.fields, shellValues: f.shellValues, shellFlags: f.shellFlags,
         profile: f.profile, range: range2(all, flags), nSamples: knnCache.s.n, ms: performance.now() - t0,
         k: m.k, kSearched, fraction: manifest.samples?.fraction ?? 1,

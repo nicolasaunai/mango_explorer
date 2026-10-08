@@ -4,6 +4,7 @@ import { SpatialHash, positionAt } from './knn';
 import { DISPLAY_BOUNDARIES as b } from './display';
 import { FLAG } from './compute';
 import { normalizedCoords } from './geometry';
+import { grid } from './grid';
 
 describe('k-NN field', () => {
   // dense samples on the dayside, value = log10(2) everywhere
@@ -14,7 +15,7 @@ describe('k-NN field', () => {
   const n = pts.length / 3;
   const s = { hash: new SpatialHash(Float64Array.from(pts), 2), values: new Float64Array(n).fill(Math.log10(2)),
     intervals: Float64Array.from({ length: n }, (_, i) => i % 50), n };
-  const out = knnField(s, 'Np_ratio', 'median', ['XZ', 'YZ'], 5, b, { k: 20, cap: 2, factor: 2, minNeff: 5, useNeff: true });
+  const out = knnField(s, 'Np_ratio', 'median', ['XZ', 'YZ'], b, { k: 20, cap: 2, factor: 2, minNeff: 5, useNeff: true });
 
   it('fills the dayside sheath and leaves the unsampled flanks NaN', () => {
     const at = (x: number, z: number) => {
@@ -25,6 +26,11 @@ describe('k-NN field', () => {
     expect(at(nose, 0).v).toBeCloseTo(Math.log10(2), 6);
     expect(at(nose, 0).f).toBe(FLAG.OK);
     expect(at(-10, 25).f).toBe(FLAG.EMPTY);
+  });
+  it('evaluates every depth shell in the grid cell layout', () => {
+    expect(out.shellValues.length).toBe(grid.nCells);
+    const [, nt, nphi] = grid.spatialShape;
+    expect(out.shellValues[(5 * nt + 0) * nphi + 0]).toBeCloseTo(Math.log10(2), 6);  // mid-sheath, subsolar
   });
   it('computes one field per requested plane', () => {
     expect(out.fields.map((f) => f.plane)).toEqual(['XZ', 'YZ']);
