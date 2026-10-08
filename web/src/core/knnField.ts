@@ -11,9 +11,13 @@ export type Plane = 'XY' | 'XZ' | 'YZ';
 export const FIELD_N = 128; // 0.5 R_E on a 64 R_E plane
 export const FIELD_HALF = 32; // the plane spans [-32, 32] R_E on both axes
 
-/** Physics position of plane coordinates (u, v); must match the slice shader. */
-export function planePoint(plane: Plane, u: number, v: number): [number, number, number] {
-  return plane === 'XZ' ? [u, 0, v] : plane === 'XY' ? [u, v, 0] : [0, u, v];
+export type PlaneOffsets = Record<Plane, number>;
+export const NO_OFFSETS: PlaneOffsets = { XY: 0, XZ: 0, YZ: 0 };
+
+/** Physics position of plane coordinates (u, v); `offset` moves the plane along its normal
+ * (Z for XY, Y for XZ, X for YZ). Must match the slice shader. */
+export function planePoint(plane: Plane, u: number, v: number, offset = 0): [number, number, number] {
+  return plane === 'XZ' ? [u, offset, v] : plane === 'XY' ? [u, v, offset] : [offset, u, v];
 }
 
 export type KnnSamples = { hash: SpatialHash; values: Float64Array; intervals: Float64Array; n: number };
@@ -60,14 +64,14 @@ export type NodeValue = { v: number; flag: number; q25: number; q50: number; q75
 
 /** Evaluate the slice planes, the shell map and the Sun-Earth-line profile with one node function. */
 export function nodeField(evaluate: (p: [number, number, number]) => NodeValue, planes: Plane[], shell: number,
-  b: Boundaries, g: Grid = defaultGrid) {
+  b: Boundaries, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS) {
   const thetaMax = g.thetaEdges[g.thetaEdges.length - 1];
   const step = (2 * FIELD_HALF) / FIELD_N;
   const fields: PlaneField[] = planes.map((plane) => {
     const values = new Float32Array(FIELD_N * FIELD_N).fill(NaN), flags = new Uint8Array(FIELD_N * FIELD_N);
     for (let j = 0; j < FIELD_N; j++)
       for (let i = 0; i < FIELD_N; i++) {
-        const p = planePoint(plane, -FIELD_HALF + (i + 0.5) * step, -FIELD_HALF + (j + 0.5) * step);
+        const p = planePoint(plane, -FIELD_HALF + (i + 0.5) * step, -FIELD_HALF + (j + 0.5) * step, offsets[plane]);
         const { d, thetaDeg } = normalizedCoords(p, b);
         if (!(d >= 0 && d <= 1) || thetaDeg >= thetaMax) continue;
         const r = evaluate(p);
@@ -100,22 +104,22 @@ export function nodeField(evaluate: (p: [number, number, number]) => NodeValue, 
 
 /** k-NN quantiles over the (sub-sampled) samples. */
 export function knnField(s: KnnSamples, q: QuantityName, stat: Stat, planes: Plane[], shell: number,
-  b: Boundaries, o: KnnOptions, g: Grid = defaultGrid) {
+  b: Boundaries, o: KnnOptions, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS) {
   const f = nodeField((p) => {
     const r = knnAt(s.hash, s.values, s.intervals, p, o.k, o.cap, o.factor);
     return { v: knnValue(r, q, stat, g), flag: knnFlag(r, o.minNeff, o.useNeff), q25: r.q25, q50: r.median, q75: r.q75, n: r.n };
-  }, planes, shell, b, g);
+  }, planes, shell, b, g, offsets);
   return { ...f, log: isLogScale(q, stat, g) };
 }
 
 /** k-NN means over the voxel sums of the full data. */
 export function voxelField(v: VoxelSet, q: QuantityName, stat: Stat, planes: Plane[], shell: number,
-  b: Boundaries, o: { k: number; cap: number; factor: number }, g: Grid = defaultGrid) {
+  b: Boundaries, o: { k: number; cap: number; factor: number }, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS) {
   const log = g.isLog(q);
   const f = nodeField((p) => {
     const r = voxelKnnAt(v, p, o.k, o.cap, o.factor, stat === 'wmean', g);
     const axis = log ? Math.log10(r.value) : r.value;
     return { v: axis, flag: Number.isFinite(axis) ? FLAG.OK : FLAG.EMPTY, q25: NaN, q50: axis, q75: NaN, n: r.n };
-  }, planes, shell, b, g);
+  }, planes, shell, b, g, offsets);
   return { ...f, log };
 }

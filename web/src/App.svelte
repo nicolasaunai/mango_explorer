@@ -21,7 +21,7 @@
   });
   $effect(() => {
     if (data.status !== 'ready' || app.source !== 'knn') return;
-    runKnn(app.frame, app.quantity, app.stat, selectionOf(app), app.planes, app.shell, app.k, app.cap, app.neff);
+    runKnn(app.frame, app.quantity, app.stat, selectionOf(app), app.planes, app.offsets, app.shell, app.k, app.cap, app.neff);
   });
   $effect(() => {
     if (data.status !== 'ready' || !app.pinA || app.source !== 'bins') return;

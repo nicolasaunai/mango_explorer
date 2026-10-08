@@ -5,7 +5,7 @@ describe('URL state', () => {
   it('round-trips', () => {
     const s = { ...DEFAULT_STATE, frame: 'GSM' as const, clock: [11, 0], cone: [4], view: 'north' as const,
       lut: 'cividis' as const, shell: 2, probe: 1234, range: [0.25, 0.75] as [number, number],
-      pinA: { clock: [0, 1], cone: [3], ma: [1, 2] }, cmp: 'diff' as const, source: 'knn' as const, k: 7000, cap: 1.5, neff: true, planes: ['XZ', 'YZ'] as ('XY' | 'XZ' | 'YZ')[] };
+      pinA: { clock: [0, 1], cone: [3], ma: [1, 2] }, cmp: 'diff' as const, source: 'knn' as const, k: 7000, cap: 1.5, neff: true, planes: ['XZ', 'YZ'] as ('XY' | 'XZ' | 'YZ')[], offsets: { XY: 1.5, XZ: -3, YZ: 0 } };
     expect(decodeHash(encodeHash(s))).toEqual(s);
   });
   it('falls back field by field on bad input', () => {

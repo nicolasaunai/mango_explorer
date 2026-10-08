@@ -1,7 +1,7 @@
 import type { Manifest, Selection } from '../core/atlas';
 import type { FrameName, QuantityName } from '../core/grid';
 import type { ProfilePoint, Stat } from '../core/compute';
-import type { Plane, PlaneField } from '../core/knnField';
+import type { Plane, PlaneField, PlaneOffsets } from '../core/knnField';
 import type { KnnResult } from '../core/knn';
 
 export type StatsRequest =
@@ -9,7 +9,7 @@ export type StatsRequest =
   | { type: 'query'; id: number; slot: Slot; frame: FrameName; quantity: QuantityName; stat: Stat; selection: Selection; profileThetaMax: number; useNeff: boolean }
   | { type: 'probe'; id: number; cell: number }
   | { type: 'knn'; id: number; frame: FrameName; quantity: QuantityName; stat: Stat; selection: Selection;
-      planes: Plane[]; shell: number; k: number; cap: number; useNeff: boolean }
+      planes: Plane[]; offsets: PlaneOffsets; shell: number; k: number; cap: number; useNeff: boolean }
   | { type: 'knnProbe'; id: number; point: [number, number, number]; cell: number };
 
 export type Slot = 'A' | 'B';

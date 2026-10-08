@@ -6,7 +6,8 @@ import type { FrameName } from '../core/grid';
 import { imfDirection, zGsmDirection } from '../core/frames';
 import { graticule, revolutionGeometry, toThree, type RadiusFn } from './geometry';
 import { PALETTE, boundaryMaterial, earthMaterial, label } from './materials';
-import { SliceLayer, type Plane } from './slice';
+import { SliceLayer, normalOf, type Plane } from './slice';
+import { normalizedCoords } from '../core/geometry';
 import type { LutName } from './lut';
 
 export type SceneInputs = {
@@ -48,6 +49,8 @@ export class SceneView {
   private raycaster = new THREE.Raycaster();
   /** Called with the physics position (X, Y, Z) of a click on the slice. */
   onPick: ((p: [number, number, number]) => void) | null = null;
+  /** Called while a slice is dragged along its normal (done = false) and on release (done = true). */
+  onPlaneDrag: ((plane: Plane, offset: number, done: boolean) => void) | null = null;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -72,18 +75,78 @@ export class SceneView {
     this.listenForPicks();
   }
 
+  private rayAt(e: PointerEvent) {
+    const r = this.canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    return this.raycaster.ray;
+  }
+
+  /** The nearest visible slice under the pointer, only where it shows the magnetosheath. */
+  private sliceUnder(e: PointerEvent): { slice: SliceLayer; point: THREE.Vector3 } | null {
+    this.rayAt(e);
+    const visible = Object.values(this.slices).filter((s) => s.mesh.visible);
+    for (const hit of this.raycaster.intersectObjects(visible.map((s) => s.mesh), false)) {
+      const slice = visible.find((s) => s.mesh === hit.object)!;
+      const p: [number, number, number] = [hit.point.x, -hit.point.z, hit.point.y];
+      if (!this.lastShape) continue;
+      const { d, thetaDeg } = normalizedCoords(p, { rMp: this.lastShape[0], rBs: this.lastShape[1] });
+      if (d >= 0 && d <= 1 && thetaDeg < 120) return { slice, point: hit.point.clone() };
+    }
+    return null;
+  }
+
   private listenForPicks() {
-    let down: { x: number; y: number } | null = null;
-    this.canvas.addEventListener('pointerdown', (e) => (down = { x: e.clientX, y: e.clientY }));
+    type Drag = { slice: SliceLayer; start: number; origin: THREE.Vector3; x: number; y: number; moved: boolean };
+    let drag: Drag | null = null;
+    let click: { x: number; y: number } | null = null;
+    // capture phase: runs before OrbitControls, so a slice drag does not also orbit the camera
+    this.canvas.addEventListener('pointerdown', (e) => {
+      click = { x: e.clientX, y: e.clientY };
+      const hit = e.button === 0 ? this.sliceUnder(e) : null;
+      if (!hit) return;
+      drag = { slice: hit.slice, start: hit.slice.offset, origin: hit.point, x: e.clientX, y: e.clientY, moved: false };
+      this.controls.enabled = false;
+      this.canvas.setPointerCapture(e.pointerId);
+      this.canvas.style.cursor = 'grabbing';
+    }, { capture: true });
+    this.canvas.addEventListener('pointermove', (e) => {
+      if (!drag) {
+        if (e.buttons === 0) this.canvas.style.cursor = this.sliceUnder(e) ? 'grab' : '';
+        return;
+      }
+      if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 4) return;
+      drag.moved = true;
+      // slide along the normal: intersect the pointer ray with the plane that contains the normal
+      // axis through the grab point and faces the camera as much as possible
+      const axis = normalOf(drag.slice.plane);
+      const view = this.camera.getWorldDirection(new THREE.Vector3());
+      const facing = view.clone().sub(axis.clone().multiplyScalar(view.dot(axis)));
+      if (facing.lengthSq() < 1e-6) return;  // looking straight down the normal
+      const target = new THREE.Vector3();
+      if (!this.rayAt(e).intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(facing.normalize(), drag.origin), target)) return;
+      const offset = Math.max(-30, Math.min(30, Math.round((drag.start + target.sub(drag.origin).dot(axis)) * 20) / 20));
+      drag.slice.setOffset(offset);
+      this.requestRender();
+      this.onPlaneDrag?.(drag.slice.plane, offset, false);
+    });
     this.canvas.addEventListener('pointerup', (e) => {
-      if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return;
-      const r = this.canvas.getBoundingClientRect();
-      const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-      this.raycaster.setFromCamera(ndc, this.camera);
-      const meshes = Object.values(this.slices).map((s) => s.mesh).filter((m) => m.visible);
-      const hit = this.raycaster.intersectObjects(meshes, false)[0];
+      if (drag) {
+        const d = drag;
+        drag = null;
+        this.controls.enabled = true;
+        this.canvas.style.cursor = 'grab';
+        if (d.moved) { this.onPlaneDrag?.(d.slice.plane, d.slice.offset, true); return; }
+      }
+      if (!click || Math.hypot(e.clientX - click.x, e.clientY - click.y) > 4) return;
+      const hit = this.sliceUnder(e);
       if (hit) this.onPick?.([hit.point.x, -hit.point.z, hit.point.y]);
     });
+  }
+
+  setOffsets(offsets: Record<Plane, number>) {
+    for (const [plane, s] of Object.entries(this.slices) as [Plane, SliceLayer][]) s.setOffset(offsets[plane]);
+    this.requestRender();
   }
 
   /** Show the statistic on each requested plane: grid cells (bins) or a field per plane (k-NN). */

@@ -16,6 +16,8 @@
   let canvas: HTMLCanvasElement;
   let view = $state<SceneView | null>(null);
   let glError = $state('');
+  let dragging = $state<{ plane: string; offset: number } | null>(null);
+  const axisOf: Record<string, string> = { XY: 'Z', XZ: 'Y', YZ: 'X' };
 
   /** Circular mean of the selected 30° sectors; null when it carries no direction. */
   function representativeClock(sectors: number[]): number | null {
@@ -33,6 +35,10 @@
     try {
       view = new SceneView(canvas);
       view.onPick = (p) => patch({ probe: cellAt(p, BOUNDARIES) ?? -1 });
+      view.onPlaneDrag = (plane, offset, done) => {
+        dragging = done ? null : { plane, offset };
+        patch({ offsets: { ...app.offsets, [plane]: offset } });
+      };
     } catch (e) {
       console.error(e);
       glError = 'WebGL is unavailable in this browser.';
@@ -54,6 +60,7 @@
     });
   });
   $effect(() => view?.setView(app.view as CameraPreset));
+  $effect(() => { const o = { ...app.offsets }; view?.setOffsets(o); });
   $effect(() => {
     const d = display.shown;
     if (!view || !d) return;
@@ -101,6 +108,7 @@
     <span class="tag muted">boundaries: {BOUNDARY_NOTE}</span>
   </div>
   <div class="side">
+    {#if dragging}<span class="tag">{dragging.plane} plane · {axisOf[dragging.plane]} = {dragging.offset.toFixed(2)} R<sub>E</sub></span>{/if}
     {#if stats.pending}<span class="tag muted">updating…</span>{/if}
     {#if stats.error}<span class="tag warn">{stats.error}</span>{/if}
     <Inspector />

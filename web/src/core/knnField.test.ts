@@ -35,6 +35,9 @@ describe('k-NN field', () => {
   });
   it('plane points lie in their plane', () => {
     expect(planePoint('XY', 1, 2)).toEqual([1, 2, 0]);
+    expect(planePoint('XY', 1, 2, 3)).toEqual([1, 2, 3]);
+    expect(planePoint('XZ', 1, 2, -4)).toEqual([1, -4, 2]);
+    expect(planePoint('YZ', 1, 2, 5)).toEqual([5, 1, 2]);
     expect(normalizedCoords(planePoint('YZ', 0, 12), b).thetaDeg).toBeCloseTo(90);
   });
 });

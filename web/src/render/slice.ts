@@ -65,12 +65,19 @@ void main() {
   fragColor = vec4(col, uOpacity);
 }`;
 
+/** Unit normal of a plane in three.js coordinates (physics X, Y, Z map to three x, -z, y). */
+export function normalOf(plane: Plane): THREE.Vector3 {
+  return plane === 'XY' ? new THREE.Vector3(0, 1, 0) : plane === 'XZ' ? new THREE.Vector3(0, 0, -1) : new THREE.Vector3(1, 0, 0);
+}
+
 export class SliceLayer {
   readonly mesh: THREE.Mesh;
   private data: THREE.Data3DTexture;
   private bounds: THREE.DataTexture;
   private material: THREE.ShaderMaterial;
   private field: THREE.DataTexture | null = null;
+  plane: Plane = 'XZ';
+  offset = 0;
 
   constructor() {
     const [nd, nt, nphi] = grid.spatialShape;
@@ -154,10 +161,18 @@ export class SliceLayer {
 
   /** Orient the plane: XZ is the noon-midnight meridian (contains the IMF in PGSM). */
   setPlane(plane: Plane) {
+    this.plane = plane;
     this.material.uniforms.uPlane.value = plane === 'XZ' ? 0 : plane === 'XY' ? 1 : 2;
     this.mesh.rotation.set(0, 0, 0);
     if (plane === 'XY') this.mesh.rotation.x = -Math.PI / 2;
     if (plane === 'YZ') this.mesh.rotation.y = Math.PI / 2;
+    this.setOffset(this.offset);
+  }
+
+  /** Move the plane along its normal, in R_E: Z for XY, Y for XZ, X for YZ (physics axes). */
+  setOffset(offset: number) {
+    this.offset = offset;
+    this.mesh.position.copy(normalOf(this.plane).multiplyScalar(offset));
     this.mesh.updateMatrixWorld();
   }
 }

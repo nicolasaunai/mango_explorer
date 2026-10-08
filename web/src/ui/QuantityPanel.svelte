@@ -78,6 +78,13 @@
           onclick={() => patch({ planes: app.planes.includes(pl) ? app.planes.filter((x) => x !== pl) : [...app.planes, pl] })}>{pl}</button>
       {/each}
     </div>
+    {#each PLANES.filter((pl) => app.planes.includes(pl)) as pl (pl)}
+      <label class="num"><span>{pl} at {({ XY: 'Z', XZ: 'Y', YZ: 'X' })[pl]} (R<sub>E</sub>)</span>
+        <input id={`offset-${pl}`} type="number" step="0.5" min="-30" max="30" value={app.offsets[pl]} class="mono"
+          onchange={(e) => { const v = Number((e.currentTarget as HTMLInputElement).value); if (Number.isFinite(v)) patch({ offsets: { ...app.offsets, [pl]: Math.max(-30, Math.min(30, v)) } }); }} />
+        <button type="button" class="link" onclick={() => patch({ offsets: { ...app.offsets, [pl]: 0 } })}>0</button></label>
+    {/each}
+    <p class="na">Drag a slice in the view to move it along its normal.</p>
   </div>
 
   <div class="ctl">
@@ -109,5 +116,6 @@
   .chips { display: flex; flex-wrap: wrap; gap: 4px; }
   .num { display: grid; grid-template-columns: 1fr 1.4fr 2.6em; gap: 6px; align-items: center; font-size: 12px; }
   .num input { accent-color: var(--mp); min-width: 0; }
+  .link { background: none; border: 0; color: var(--muted); font: 11px var(--f-mono); cursor: pointer; text-decoration: underline; }
   .num input[type='number'] { font-size: 12px; padding: 3px 6px; border: 1px solid var(--rule); border-radius: 4px; background: var(--panel); color: var(--fg); }
 </style>

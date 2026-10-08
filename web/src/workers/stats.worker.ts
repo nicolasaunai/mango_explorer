@@ -65,7 +65,7 @@ self.onmessage = async (e: MessageEvent<StatsRequest>) => {
       voxCache.k = m.k; voxCache.weighted = m.stat === 'wmean';
       knnCache = null;
       const f = voxelField(voxCache.v, m.quantity, m.stat, m.planes, m.shell, DISPLAY_BOUNDARIES,
-        { k: m.k, cap: m.cap, factor: KNN.search_factor });
+        { k: m.k, cap: m.cap, factor: KNN.search_factor }, undefined, m.offsets);
       const all = new Float32Array([...f.fields.flatMap((p) => [...p.values]), ...f.shellValues]);
       const flags = new Uint8Array([...f.fields.flatMap((p) => [...p.flags]), ...f.shellFlags]);
       post({
@@ -87,7 +87,7 @@ self.onmessage = async (e: MessageEvent<StatsRequest>) => {
       const kSearched = searchedK(m.k);
       knnCache.k = m.k; knnCache.kSearched = kSearched;
       const opts = { k: kSearched, cap: m.cap, factor: KNN.search_factor, minNeff: KNN.min_neff, useNeff: m.useNeff };
-      const f = knnField(knnCache.s, m.quantity, m.stat, m.planes, m.shell, DISPLAY_BOUNDARIES, opts);
+      const f = knnField(knnCache.s, m.quantity, m.stat, m.planes, m.shell, DISPLAY_BOUNDARIES, opts, undefined, m.offsets);
       const all = new Float32Array([...f.fields.flatMap((p) => [...p.values]), ...f.shellValues]);
       const flags = new Uint8Array([...f.fields.flatMap((p) => [...p.flags]), ...f.shellFlags]);
       post({

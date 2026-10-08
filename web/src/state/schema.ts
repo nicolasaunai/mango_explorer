@@ -39,6 +39,8 @@ export const ViewState = z.object({
   k: z.number().int().min(1),
   cap: z.number().min(0.25).max(10),
   neff: z.boolean(),
+  /** slice positions along their normals, R_E: XY at Z, XZ at Y, YZ at X */
+  offsets: z.object({ XY: z.number().min(-40).max(40), XZ: z.number().min(-40).max(40), YZ: z.number().min(-40).max(40) }),
 });
 export type ViewState = z.infer<typeof ViewState>;
 
@@ -63,6 +65,7 @@ export const DEFAULT_STATE: ViewState = {
   k: grid.raw.knn.k,
   cap: grid.raw.knn.cap_re,
   neff: grid.raw.neff.overlay_default,
+  offsets: { XY: 0, XZ: 0, YZ: 0 },
 };
 
 export const PRESETS: { id: string; label: string; hint: string; state: Partial<ViewState> }[] = [
@@ -84,6 +87,7 @@ export function encodeHash(s: ViewState): string {
   });
   if (s.probe >= 0) p.set('pr', String(s.probe));
   if (s.range) p.set('cr', s.range.map((x) => +x.toPrecision(5)).join('~'));
+  if (s.offsets.XY || s.offsets.XZ || s.offsets.YZ) p.set('po', [s.offsets.XY, s.offsets.XZ, s.offsets.YZ].map((x) => +x.toFixed(2)).join('~'));
   if (s.neff !== DEFAULT_STATE.neff) p.set('ne', s.neff ? '1' : '0');
   if (s.source === 'knn') { p.set('src', 'knn'); p.set('k', String(s.k)); p.set('cap', String(s.cap)); }
   if (s.pinA) { p.set('pa', [s.pinA.clock, s.pinA.cone, s.pinA.ma].map(list).join('~')); p.set('cmp', s.cmp); }
@@ -108,6 +112,7 @@ export function decodeHash(hash: string): ViewState {
     k: p.has('k') ? Number(p.get('k')) : undefined,
     cap: p.has('cap') ? Number(p.get('cap')) : undefined,
     neff: p.has('ne') ? p.get('ne') === '1' : undefined,
+    offsets: p.has('po') ? (([XY, XZ, YZ]) => ({ XY, XZ, YZ }))(p.get('po')!.split('~').map(Number)) : undefined,
   };
   const out = { ...DEFAULT_STATE } as Record<string, unknown>;
   for (const [k, v] of Object.entries(candidate)) {
