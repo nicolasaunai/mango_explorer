@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_STATE, clockUndefined, decodeHash, encodeHash } from './schema';
+import { DEFAULT_STATE, clockUndefined, decodeHash, encodeHash, mixesPolarity } from './schema';
 
 describe('URL state', () => {
   it('round-trips', () => {
@@ -27,5 +27,20 @@ describe('URL state', () => {
   it('flags radial IMF', () => {
     expect(clockUndefined([0, 1])).toBe(true);
     expect(clockUndefined([1, 2])).toBe(false);
+  });
+  it('line layers and density round-trip, density only when not default', () => {
+    const s = { ...DEFAULT_STATE, layers: ['mp', 'flow', 'field'] as typeof DEFAULT_STATE.layers, density: 220 };
+    expect(decodeHash(encodeHash(s))).toEqual(s);
+    expect(encodeHash(DEFAULT_STATE)).not.toContain('ln=');
+    expect(decodeHash('#ln=9999').density).toBe(DEFAULT_STATE.density);
+    expect(DEFAULT_STATE.layers).not.toContain('flow');
+  });
+  it('field lines mix IMF polarities in PGSM without fold, and in GSM over more than 90 deg of clock', () => {
+    expect(mixesPolarity('PGSM_fold', [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])).toBe(false);
+    expect(mixesPolarity('PGSM', [0])).toBe(true);
+    expect(mixesPolarity('GSM', [11, 0])).toBe(false);
+    expect(mixesPolarity('GSM', [0, 1, 2])).toBe(false);
+    expect(mixesPolarity('GSM', [11, 0, 1, 2])).toBe(true);
+    expect(mixesPolarity('GSM', [0, 6])).toBe(true);
   });
 });

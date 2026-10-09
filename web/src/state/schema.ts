@@ -17,7 +17,7 @@ export const STATS_FOR = {
   knn: ['wmean', 'mean', 'median', 'q25', 'q75'],
 } as const;
 export const PLANES = ['XY', 'XZ', 'YZ'] as const;
-export const LAYERS = ['mp', 'bs', 'tint', 'shells', 'slice', 'zgsm'] as const;
+export const LAYERS = ['mp', 'bs', 'tint', 'shells', 'slice', 'zgsm', 'flow', 'field'] as const;
 
 export const ViewState = z.object({
   frame: z.enum(['GSM', 'PGSM', 'PGSM_fold']),
@@ -40,6 +40,8 @@ export const ViewState = z.object({
   k: z.number().int().min(1),
   cap: z.number().min(0.25).max(10),
   neff: z.boolean(),
+  /** seeds per kind of line (flow, field) */
+  density: z.number().int().min(50).max(400),
   /** slice positions along their normals, R_E: XY at Z, XZ at Y, YZ at X */
   offsets: z.object({ XY: z.number().min(-40).max(40), XZ: z.number().min(-40).max(40), YZ: z.number().min(-40).max(40) }),
 });
@@ -66,6 +68,7 @@ export const DEFAULT_STATE: ViewState = {
   k: grid.raw.knn.k,
   cap: grid.raw.knn.cap_re,
   neff: grid.raw.neff.overlay_default,
+  density: 150,
   offsets: { XY: 0, XZ: 0, YZ: 0 },
 };
 
@@ -93,6 +96,7 @@ export function encodeHash(s: ViewState): string {
   if (s.range) p.set('cr', s.range.map((x) => +x.toPrecision(5)).join('~'));
   if (s.offsets.XY || s.offsets.XZ || s.offsets.YZ) p.set('po', [s.offsets.XY, s.offsets.XZ, s.offsets.YZ].map((x) => +x.toFixed(2)).join('~'));
   if (s.neff !== DEFAULT_STATE.neff) p.set('ne', s.neff ? '1' : '0');
+  if (s.density !== DEFAULT_STATE.density) p.set('ln', String(s.density));
   if (s.source === 'knn') { p.set('src', 'knn'); p.set('k', String(s.k)); p.set('cap', String(s.cap)); }
   if (s.pinA) { p.set('pa', [s.pinA.clock, s.pinA.cone, s.pinA.ma].map(list).join('~')); p.set('cmp', s.cmp); }
   return '#' + p.toString();
@@ -116,6 +120,7 @@ export function decodeHash(hash: string): ViewState {
     k: p.has('k') ? Number(p.get('k')) : undefined,
     cap: p.has('cap') ? Number(p.get('cap')) : undefined,
     neff: p.has('ne') ? p.get('ne') === '1' : undefined,
+    density: p.has('ln') ? Number(p.get('ln')) : undefined,
     offsets: p.has('po') ? (([XY, XZ, YZ]) => ({ XY, XZ, YZ }))(p.get('po')!.split('~').map(Number)) : undefined,
   };
   const out = { ...DEFAULT_STATE } as Record<string, unknown>;
@@ -129,3 +134,14 @@ export function decodeHash(hash: string): ViewState {
 
 /** True when every selected cone bin is below 30°, where the clock angle is ill-defined. */
 export const clockUndefined = (cone: number[]) => cone.every((b) => grid.conditionEdges('cone_deg')[b + 1] <= 30);
+
+/** Field lines average opposite IMF orientations: PGSM without the fold (mixed Bx), or GSM when the selected
+ * clock sectors span more than 90 deg. */
+export function mixesPolarity(frame: ViewState['frame'], clock: number[]): boolean {
+  if (frame === 'PGSM_fold') return false;
+  if (frame === 'PGSM') return true;
+  const sel = [...new Set(clock)].sort((a, b) => a - b);
+  let gap = 0;  // largest run of unselected sectors, circularly
+  sel.forEach((s, i) => { gap = Math.max(gap, (sel[(i + 1) % sel.length] - s - 1 + N_CLOCK) % N_CLOCK); });
+  return (N_CLOCK - gap) * (360 / N_CLOCK) > 90;
+}
