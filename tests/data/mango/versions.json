@@ -1,5 +1,8 @@
 {
- "space_mango": "0.1.2.dev35+259f996",
+ "space_mango": {
+  "version": "0.1.2.dev35+259f996",
+  "commit": "b28db18"
+ },
  "dataset": "2026.0",
  "window": {
   "spacecraft": "C1",

@@ -13,7 +13,7 @@ permissions:
 env:
   # The MANGO atlas is built offline (python -m mango_explorer.atlas build --mango-api, then
   # `pack`) and attached to this release; bump the tag to publish a new atlas.
-  ATLAS_TAG: atlas-2026.0-grid-v2-vectors
+  ATLAS_TAG: atlas-2026.0-grid-v3
 
 jobs:
   build-and-deploy:
