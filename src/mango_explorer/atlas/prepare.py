@@ -15,6 +15,7 @@ from mango_explorer.atlas.quantities import (
     quantity_values,
     row_mask,
 )
+from mango_explorer.atlas.vectors import normalized_vectors
 
 
 @dataclass
@@ -34,6 +35,7 @@ class Prepared:
     bx_neg: np.ndarray | None = None
     t_ns: np.ndarray | None = None
     values: dict[str, np.ndarray] | None = None
+    vectors: dict[str, np.ndarray] | None = None
     xyz: np.ndarray | None = None  # normalized GSM positions (n, 3)
 
 
@@ -71,4 +73,5 @@ def prepare(cols: dict[str, np.ndarray], grid: Grid, frames=None) -> Prepared:
         bx_neg=np.asarray(kept["Bx_imf"], dtype=float) < 0,
         t_ns=np.asarray(kept["Time"]).astype("datetime64[ns]").astype(np.int64),
         values=qvals,
+        vectors=normalized_vectors(kept, grid),
     )

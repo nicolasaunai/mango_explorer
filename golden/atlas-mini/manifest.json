@@ -1,7 +1,7 @@
 {
  "format": "mango-atlas/1",
  "grid": "grid-v2",
- "created": "2026-10-08T07:41:34+00:00",
+ "created": "2026-10-09T09:57:30+00:00",
  "source": {
   "kind": "synthetic"
  },
@@ -11,7 +11,7 @@
   "dropped_row_filter": 88,
   "dropped_outside_shell_or_theta": 2824
  },
- "build_seconds": 0.07,
+ "build_seconds": 0.1,
  "hours": {
   "path": "hours.bin",
   "n_rows": 41,
@@ -554,6 +554,108 @@
      },
      "V_ratio": {
       "path": "voxels/PGSM_fold/V_ratio.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 811,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 811,
+        "offset": 3244
+       }
+      ]
+     },
+     "V_vec_x": {
+      "path": "voxels/PGSM_fold/V_vec_x.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 811,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 811,
+        "offset": 3244
+       }
+      ]
+     },
+     "V_vec_y": {
+      "path": "voxels/PGSM_fold/V_vec_y.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 811,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 811,
+        "offset": 3244
+       }
+      ]
+     },
+     "V_vec_z": {
+      "path": "voxels/PGSM_fold/V_vec_z.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 811,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 811,
+        "offset": 3244
+       }
+      ]
+     },
+     "B_vec_x": {
+      "path": "voxels/PGSM_fold/B_vec_x.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 811,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 811,
+        "offset": 3244
+       }
+      ]
+     },
+     "B_vec_y": {
+      "path": "voxels/PGSM_fold/B_vec_y.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 811,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 811,
+        "offset": 3244
+       }
+      ]
+     },
+     "B_vec_z": {
+      "path": "voxels/PGSM_fold/B_vec_z.bin",
       "sections": [
        {
         "name": "sum",

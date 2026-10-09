@@ -62,6 +62,10 @@ def synthetic_magnetosheath(n_rows: int = 100_000, seed: int = 0,
     b_local = compression * np.stack([bx_imf, by_imf, bz_imf])
     v_scale = 0.25 + 0.6 * np.clip(d, 0, 1) + 0.3 * np.sin(theta)
 
+    scale = np.random.default_rng(seed + 1000)   # separate stream: existing values stay identical
+    a_mp = per(scale.lognormal(0.0, 0.06, n_pass))
+    a_bs = per(scale.lognormal(0.0, 0.06, n_pass))
+
     def nan_some(a, frac=0.003):
         a = a.copy()
         a[rng.random(n) < frac] = np.nan
@@ -75,6 +79,6 @@ def synthetic_magnetosheath(n_rows: int = 100_000, seed: int = 0,
         "Bx_imf": nan_some(bx_imf), "By_imf": by_imf, "Bz_imf": bz_imf, "Np_sw": np_sw,
         "Vx_sw": vx_sw, "Vy_sw": vy_sw, "Vz_sw": vz_sw, "Tp_sw": tp_sw, "Pd_sw": pd_sw,
         "Beta_sw": beta_sw, "Ma_sw": ma_sw,
-        "R_norm": d, "Norma_pos": np.ones(n, dtype=bool), "SW_pairing": np.ones(n, dtype=bool),
+        "R_norm": d, "R_mp": a_mp * r_mp, "R_bs": a_bs * r_bs, "Norma_pos": np.ones(n, dtype=bool), "SW_pairing": np.ones(n, dtype=bool),
         "X_gsm_norm": x, "Y_gsm_norm": y, "Z_gsm_norm": z,
     })

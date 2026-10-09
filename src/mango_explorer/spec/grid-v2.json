@@ -252,5 +252,14 @@
     "index_offset": 512,
     "definition": "Per (frame, condition bin, voxel) the number of samples and the sum of the raw value of each quantity (finite values only). Voxels are cubes of size_re in the normalized frame coordinates; id = (i<<20)|(j<<10)|k with i = floor(x/size_re)+index_offset (same for j with y, k with z).",
     "knn": "For a node, voxels are ordered by the distance d from the node to their centre (ties by id); their counts are accumulated until k samples are reached (the last voxel contributes only the samples still needed). NaN when fewer than ceil(k/2) samples lie within search_factor*cap_re, or when the voxel where the cumulative count reaches ceil(k/2) is farther than cap_re. Value = sum_v w_v * f_v * S_v / sum_v w_v * f_v * N_v with f_v the used fraction of voxel v, S_v and N_v its sum and count, and w_v = 1/max(d_v, size_re/2) for the distance-weighted mean (sklearn KNeighborsRegressor weights='distance') or 1 for the plain mean."
+  },
+  "vectors": {
+    "names": {
+      "V_vec": {"columns": ["Vx", "Vy", "Vz"], "magnetic": false},
+      "B_vec": {"columns": ["Bx", "By", "Bz"], "magnetic": true}
+    },
+    "mapping": "Each sample's GSM vector is pushed forward through MANGO's radial normalization r_n = R*_mp + D (R*_bs - R*_mp), D = (r - R_mp)/(R_bs - R_mp): v_r,n = (dR*/dR) v_r + [R*_mp' + D dR*' - dR* (R_mp' + D dR')/dR] v_theta / r, v_theta,n = (r_n/r) v_theta, v_phi,n = (r_n/r) v_phi, with ' = d/dtheta, dR = R_bs - R_mp, * = reference_boundaries. The sample's slopes are the reference slopes scaled by R_mp/R*_mp and R_bs/R*_bs (approximation A1).",
+    "frame": "Rotated about X like positions; magnetic vectors flip sign under PGSM_fold when Bx_imf < 0.",
+    "voxels": "Voxel quantities <name>_x, <name>_y, <name>_z: per (frame, condition bin, voxel) the count of samples with all three mapped components finite and the sum of each component in the frame. The vector field is the voxel k-NN mean of each component (voxels.knn, distance-weighted)."
   }
 }

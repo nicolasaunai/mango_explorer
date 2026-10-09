@@ -14,6 +14,7 @@ from mango_explorer.atlas.binning import flat_condition_index
 from mango_explorer.atlas.grid import Grid
 from mango_explorer.atlas.knn import frame_positions
 from mango_explorer.atlas.prepare import Prepared
+from mango_explorer.atlas.vectors import COMPONENTS, VECTORS, in_frame
 
 
 def voxel_ids(xyz, grid: Grid) -> np.ndarray:
@@ -37,7 +38,8 @@ class VoxelAccumulator:
     def __init__(self, grid: Grid, cube_id: str, frame: str):
         self.grid, self.frame = grid, frame
         self.dims, self.shape = grid.cube_dims(cube_id), grid.cube_shape(cube_id)
-        self._parts: dict[str, list[tuple[np.ndarray, np.ndarray, np.ndarray]]] = {q: [] for q in grid.quantity_names}
+        self._parts: dict[str, list[tuple[np.ndarray, np.ndarray, np.ndarray]]] = {
+            q: [] for q in [*grid.quantity_names, *COMPONENTS]}
 
     def add(self, prep: Prepared) -> None:
         cond = flat_condition_index(prep.cond_bins, self.dims, self.shape)
@@ -47,10 +49,21 @@ class VoxelAccumulator:
         for q, v in prep.values.items():
             m = ok & np.isfinite(v)
             u, inv = np.unique(key[m], return_inverse=True)
-            self._parts[q].append((u, np.bincount(inv, minlength=len(u)),
-                                   np.bincount(inv, weights=v[m], minlength=len(u))))
-            if len(self._parts[q]) >= 8:
-                self._parts[q] = [self._merge(self._parts[q])]
+            self._push(q, u, np.bincount(inv, minlength=len(u)), np.bincount(inv, weights=v[m], minlength=len(u)))
+        if prep.vectors is None:
+            return
+        for name, (_, magnetic) in VECTORS.items():
+            vec = in_frame(self.frame, prep.vectors[name], prep.clock_deg, prep.bx_neg, magnetic)
+            m = ok & np.all(np.isfinite(vec), axis=1)
+            u, inv = np.unique(key[m], return_inverse=True)
+            n = np.bincount(inv, minlength=len(u))
+            for i, c in enumerate("xyz"):
+                self._push(f"{name}_{c}", u, n, np.bincount(inv, weights=vec[m, i], minlength=len(u)))
+
+    def _push(self, q, u, n, s) -> None:
+        self._parts[q].append((u, n, s))
+        if len(self._parts[q]) >= 8:
+            self._parts[q] = [self._merge(self._parts[q])]
 
     @staticmethod
     def _merge(parts):

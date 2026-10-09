@@ -20,7 +20,7 @@ COLUMNS = (
     "Bx", "By", "Bz", "Np", "Vx", "Vy", "Vz", "Tp",
     "Bx_imf", "By_imf", "Bz_imf", "Np_sw", "Vx_sw", "Vy_sw", "Vz_sw", "Tp_sw",
     "Pd_sw", "Beta_sw", "Ma_sw",
-    "R_norm", "Norma_pos", "SW_pairing", "X_gsm_norm", "Y_gsm_norm", "Z_gsm_norm",
+    "R_norm", "R_mp", "R_bs", "Norma_pos", "SW_pairing", "X_gsm_norm", "Y_gsm_norm", "Z_gsm_norm",
 )
 
 _FINITE_REQUIRED = ("Bx_imf", "By_imf", "Bz_imf", "X_gsm_norm", "Y_gsm_norm", "Z_gsm_norm")

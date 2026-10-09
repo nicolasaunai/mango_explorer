@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.spatial import cKDTree
 
+from mango_explorer.atlas.binning import flat_condition_index
 from mango_explorer.atlas.grid import load_grid
 from mango_explorer.atlas.knn import frame_positions
 from mango_explorer.atlas.pipeline import build_atlas
@@ -8,6 +9,7 @@ from mango_explorer.atlas.prepare import prepare
 from mango_explorer.atlas.sources import columns_from_polars, iter_polars
 from mango_explorer.atlas.store import read_atlas, read_voxels
 from mango_explorer.atlas.synthetic import synthetic_magnetosheath
+from mango_explorer.atlas.vectors import COMPONENTS, in_frame
 from mango_explorer.atlas.voxels import (
     VoxelAccumulator,
     select_voxels,
@@ -82,3 +84,45 @@ def test_voxels_round_trip_through_the_atlas(tmp_path):
     base, qs = read_voxels(tmp_path, entry)
     assert entry["frame"] == "PGSM"
     assert base["cond_offsets"][-1] == len(base["voxel"]) == len(qs["Np"]["n"])
+
+
+def _all_conds():
+    return list(range(int(np.prod(G.cube_shape("clock-cone-Ma")))))
+
+
+def _kept(prep, frame):
+    cond = flat_condition_index(prep.cond_bins, G.cube_dims("clock-cone-Ma"), G.cube_shape("clock-cone-Ma"))
+    return (cond >= 0) & (prep.cells[frame] >= 0)
+
+
+def test_vector_voxel_sums_match_rows_and_b_flips_under_the_fold():
+    df = synthetic_magnetosheath(60_000, seed=12)
+    prep = prepare(columns_from_polars(df), G)
+    for frame in ("PGSM", "PGSM_fold"):
+        acc = VoxelAccumulator(G, "clock-cone-Ma", frame)
+        acc.add(prep)
+        vox = acc.finalize()
+        assert set(COMPONENTS) <= set(vox["quantities"])
+        for name, magnetic in (("V_vec", False), ("B_vec", True)):
+            vec = in_frame(frame, prep.vectors[name], prep.clock_deg, prep.bx_neg, magnetic)
+            ok = _kept(prep, frame) & np.all(np.isfinite(vec), axis=1)
+            for i, c in enumerate("xyz"):
+                _, n, s = select_voxels(vox["base"], vox["quantities"][f"{name}_{c}"], _all_conds())
+                assert int(n.sum()) == int(ok.sum())
+                assert np.isclose(s.sum(), vec[ok, i].sum(), rtol=1e-4, atol=1e-3)
+
+
+def test_rows_without_boundaries_leave_scalars_unchanged():
+    df = synthetic_magnetosheath(30_000, seed=13)
+    cols = {k: np.array(v, copy=True) for k, v in columns_from_polars(df).items()}
+    full = VoxelAccumulator(G, "clock-cone-Ma", "PGSM_fold")
+    full.add(prepare(cols, G))
+    cols["R_mp"][::10] = np.nan
+    holed = VoxelAccumulator(G, "clock-cone-Ma", "PGSM_fold")
+    holed.add(prepare(cols, G))
+    a, b = full.finalize(), holed.finalize()
+    for q in G.quantity_names:
+        np.testing.assert_array_equal(a["quantities"][q]["n"], b["quantities"][q]["n"])
+    na = select_voxels(a["base"], a["quantities"]["V_vec_x"], _all_conds())[1].sum()
+    nb = select_voxels(b["base"], b["quantities"]["V_vec_x"], _all_conds())[1].sum()
+    assert 0.85 * na < nb < 0.95 * na
