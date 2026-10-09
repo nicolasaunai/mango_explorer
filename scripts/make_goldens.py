@@ -122,6 +122,26 @@ def voxel_golden(root, manifest, sel):
     return out
 
 
+def vector_voxel_golden(root, manifest, sel):
+    entry = next(v for v in manifest["voxels"]["frames"] if v["frame"] == "PGSM_fold")
+    base, qs = read_voxels(root, entry)
+    conds = cubes_selected(manifest, sel)
+    k, cap = 300, 3.0
+    vid, _, _ = select_voxels(base, qs["B_vec_x"], conds)
+    rng = np.random.default_rng(12)
+    centers = voxel_centers(vid, G)
+    nodes = np.concatenate([centers[rng.choice(len(centers), 8, replace=False)] + rng.normal(0, 0.4, (8, 3)),
+                            [[0.0, 40.0, 0.0]]])
+    out = {"k": k, "cap": cap, "nodes": lst(nodes)}
+    for name in ("V_vec", "B_vec"):
+        comps = []
+        for c in "xyz":
+            v_c, n_c, s_c = select_voxels(base, qs[f"{name}_{c}"], conds)
+            comps.append(voxel_knn(nodes, v_c, n_c, s_c, G, k=k, cap=cap)["value"])
+        out[name] = [[None if not np.isfinite(x) else round(float(x), 12) for x in row] for row in np.stack(comps, 1)]
+    return out
+
+
 def cubes_selected(manifest, sel):
     entry = manifest["cubes"][0]
     axes = [sel.get(d, list(range(n))) for d, n in zip(entry["dims"], entry["shape"])]
@@ -147,6 +167,7 @@ def atlas_mini():
     knn = knn_golden(out, manifest, sel)
     vox = voxel_golden(out, manifest, sel)
     return {"selection": sel, "frame": "PGSM_fold", "quantity": "Np_ratio", "knn": knn, "voxel_knn": vox,
+            "vector_knn": vector_voxel_golden(out, manifest, sel),
             "hours_n": int(hours["n"][in_sel].sum()), "hours_neff": len(np.unique(keys[in_sel])),
             "clock_marginal_neff": clock_neff,
             "cells": nz.tolist(), "n": q["n"][nz].tolist(),

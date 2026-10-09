@@ -53,6 +53,32 @@ export class VoxelFrame {
     return { vid: Uint32Array.from(vids), n: Float64Array.from(ns), sum: Float64Array.from(ss), centers,
       hash: new SpatialHash(centers, cell), total: ns.reduce((a, b) => a + b, 0) };
   }
+
+  /** Sum the selected condition bins of a vector's three component sums (counts are shared). */
+  async selectVector(name: VectorName, sel: Selection, cell: number, g: Grid = defaultGrid): Promise<VectorVoxelSet> {
+    const files = (['x', 'y', 'z'] as const).map((c) => this.entry.quantities[`${name}_${c}`]);
+    if (files.some((f) => !f)) throw new Error(`this atlas has no ${name} voxel sums (rebuild it)`);
+    const comps = await Promise.all(files.map((f) => loadSections(this.fetchBytes, f) as Promise<Record<string, Typed>>));
+    const cube = this.manifest.cubes[0];
+    const conds = selectedConditions(cube.dims, cube.shape, sel);
+    const off = this.base.cond_offsets, vox = this.base.voxel, qn = comps[0].n;
+    const index = new Map<number, number>();
+    const vids: number[] = [], ns: number[] = [], ss: [number[], number[], number[]] = [[], [], []];
+    for (const c of conds)
+      for (let r = off[c]; r < off[c + 1]; r++) {
+        if (qn[r] === 0) continue;
+        const v = vox[r];
+        let i = index.get(v);
+        if (i === undefined) { i = vids.length; index.set(v, i); vids.push(v); ns.push(0); ss.forEach((s) => s.push(0)); }
+        ns[i] += qn[r];
+        for (let k = 0; k < 3; k++) ss[k][i] += comps[k].sum[r];
+      }
+    const centers = new Float64Array(vids.length * 3);
+    vids.forEach((v, i) => centers.set(voxelCenter(v, g), 3 * i));
+    return { vid: Uint32Array.from(vids), n: Float64Array.from(ns),
+      sums: [Float64Array.from(ss[0]), Float64Array.from(ss[1]), Float64Array.from(ss[2])], centers,
+      hash: new SpatialHash(centers, cell), total: ns.reduce((a, b) => a + b, 0) };
+  }
 }
 
 export type VoxelKnnResult = { value: number; n: number; nVoxels: number; distMedian: number };
@@ -60,11 +86,15 @@ export type VoxelKnnResult = { value: number; n: number; nVoxels: number; distMe
 /** k-NN mean of one node (grid spec "voxels.knn"); `weighted` = 1/d weights as sklearn's 'distance'. */
 let cIdx = new Int32Array(1024), cDist = new Float64Array(1024), cShell = new Int32Array(1024);
 
-export function voxelKnnAt(v: VoxelSet, node: [number, number, number], k: number, cap: number, factor: number,
-  weighted: boolean, g: Grid = defaultGrid): VoxelKnnResult {
+type Walkable = { vid: Uint32Array; n: Float64Array; hash: SpatialHash };
+
+/** Visit the voxels holding a node's k nearest samples (grid spec "voxels.knn"): `use(i, taken, d)` for each
+ * voxel, the last one only partly. Returns the samples used, voxels used and the median distance
+ * (NaN, and nothing visited, when fewer than ceil(k/2) samples lie within factor * cap). */
+function walkNeighbours(v: Walkable, node: [number, number, number], k: number, cap: number, factor: number,
+  g: Grid, use: (i: number, taken: number, d: number) => void) {
   const size = g.raw.voxels.size_re, maxR = factor * cap, half = Math.ceil(k / 2);
-  const out: VoxelKnnResult = { value: NaN, n: 0, nVoxels: 0, distMedian: NaN };
-  // grow the radius until it holds k samples: all voxels closer than the k-th are then inside
+  const out = { n: 0, nVoxels: 0, distMedian: NaN };
   let m = 0, r = Math.min(maxR, Math.max(size, maxR / 8));
   for (; ; r = Math.min(2 * r, maxR)) {
     m = v.hash.within(node[0], node[1], node[2], r);
@@ -73,8 +103,6 @@ export function voxelKnnAt(v: VoxelSet, node: [number, number, number], k: numbe
     if (tot >= k || r >= maxR) break;
   }
   if (m > cIdx.length) { cIdx = new Int32Array(2 * m); cDist = new Float64Array(2 * m); cShell = new Int32Array(2 * m); }
-  // thin distance shells: whole shells are added in any order, only the shells where the
-  // cumulative count crosses k (and k/2, for the median distance) are ordered by (distance, id)
   const width = size / 4, nShell = Math.floor(r / width) + 2;
   const shellN = new Float64Array(nShell);
   for (let j = 0; j < m; j++) {
@@ -87,7 +115,7 @@ export function voxelKnnAt(v: VoxelSet, node: [number, number, number], k: numbe
     if (shellK < 0 && cum + shellN[s] >= k) { shellK = s; beforeK = cum; }
     cum += shellN[s];
   }
-  if (shellHalf < 0) return out;  // fewer than ceil(k/2) samples within the search radius
+  if (shellHalf < 0) return out;
   const ordered = (s: number) => {
     const list: number[] = [];
     for (let j = 0; j < m; j++) if (cShell[j] === s) list.push(j);
@@ -95,22 +123,47 @@ export function voxelKnnAt(v: VoxelSet, node: [number, number, number], k: numbe
   };
   let c = beforeHalf;
   for (const j of ordered(shellHalf)) { c += v.n[cIdx[j]]; if (c >= half) { out.distMedian = cDist[j]; break; } }
-
   const last = shellK < 0 ? nShell - 1 : shellK;
-  let num = 0, den = 0, total = 0, nVox = 0;
-  const add = (j: number, take: number) => {
-    const i = cIdx[j], w = weighted ? 1 / Math.max(cDist[j], size / 2) : 1;
-    num += (w * take * v.sum[i]) / v.n[i]; den += w * take; total += take; nVox++;
-  };
-  for (let j = 0; j < m; j++) if (cShell[j] < last) add(j, v.n[cIdx[j]]);
+  const take = (j: number, t: number) => { use(cIdx[j], t, cDist[j]); out.n += t; out.nVoxels++; };
+  for (let j = 0; j < m; j++) if (cShell[j] < last) take(j, v.n[cIdx[j]]);
   c = shellK < 0 ? cum - shellN[last] : beforeK;
   for (const j of ordered(last)) {
     const n = v.n[cIdx[j]];
-    if (c + n >= k) { add(j, k - c); c = k; break; }
-    add(j, n); c += n;
+    if (c + n >= k) { take(j, k - c); c = k; break; }
+    take(j, n); c += n;
   }
-  out.n = total; out.nVoxels = nVox;
-  if (out.distMedian > cap) return out;
+  return out;
+}
+
+export function voxelKnnAt(v: VoxelSet, node: [number, number, number], k: number, cap: number, factor: number,
+  weighted: boolean, g: Grid = defaultGrid): VoxelKnnResult {
+  const size = g.raw.voxels.size_re;
+  let num = 0, den = 0;
+  const w = walkNeighbours(v, node, k, cap, factor, g, (i, t, d) => {
+    const wt = weighted ? 1 / Math.max(d, size / 2) : 1;
+    num += (wt * t * v.sum[i]) / v.n[i]; den += wt * t;
+  });
+  const out: VoxelKnnResult = { value: NaN, n: w.n, nVoxels: w.nVoxels, distMedian: w.distMedian };
+  if (!(w.distMedian <= cap)) return out;
   out.value = num / den;
   return out;
+}
+
+export type VectorName = 'V_vec' | 'B_vec';
+export type VectorVoxelSet = { vid: Uint32Array; n: Float64Array; sums: [Float64Array, Float64Array, Float64Array];
+  centers: Float64Array; hash: SpatialHash; total: number };
+
+/** 1/d-weighted k-NN mean vector of a node (each component as voxelKnnAt), or null where that is NaN. */
+export function voxelVectorAt(v: VectorVoxelSet, node: [number, number, number], k: number, cap: number, factor: number,
+  g: Grid = defaultGrid): [number, number, number] | null {
+  const size = g.raw.voxels.size_re;
+  const num = [0, 0, 0];
+  let den = 0;
+  const w = walkNeighbours(v, node, k, cap, factor, g, (i, t, d) => {
+    const wt = 1 / Math.max(d, size / 2);
+    for (let c = 0; c < 3; c++) num[c] += (wt * t * v.sums[c][i]) / v.n[i];
+    den += wt * t;
+  });
+  if (!(w.distMedian <= cap)) return null;
+  return [num[0] / den, num[1] / den, num[2] / den];
 }

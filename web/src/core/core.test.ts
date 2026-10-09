@@ -190,4 +190,25 @@ describe('voxel k-NN', () => {
       });
     }
   });
+  it('reproduces the Python vector voxel k-NN (V and B)', async () => {
+    const { VoxelFrame, voxelVectorAt } = await import('./voxels');
+    const ref = golden.atlas_mini, gv = ref.vector_knn;
+    const frame = await VoxelFrame.load(await loadManifest(fetchBytes), 'PGSM_fold', fetchBytes);
+    for (const name of ['V_vec', 'B_vec'] as const) {
+      const set = await frame.selectVector(name, ref.selection, gv.cap / 2);
+      gv.nodes.forEach((node, i) => {
+        const r = voxelVectorAt(set, node as [number, number, number], gv.k, gv.cap, grid.raw.knn.search_factor);
+        const want = gv[name][i];
+        if (want[0] === null) expect(r).toBeNull();
+        else want.forEach((w, c) => close(r![c], w as number, 1e-6, 1e-9));
+      });
+    }
+  });
+  it('says clearly when the atlas has no vector sums', async () => {
+    const { VoxelFrame } = await import('./voxels');
+    const m = structuredClone(await loadManifest(fetchBytes));
+    for (const f of m.voxels!.frames) for (const c of 'xyz') delete f.quantities[`B_vec_${c}`];
+    const frame = await VoxelFrame.load(m, 'PGSM_fold', fetchBytes);
+    await expect(frame.selectVector('B_vec', golden.atlas_mini.selection, 1)).rejects.toThrow(/no B_vec voxel sums/);
+  });
 });
