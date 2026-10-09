@@ -1,10 +1,10 @@
 // Everything the views need in k-NN mode, computed from the selected samples.
-import { grid as defaultGrid, type FrameName, type Grid, type QuantityName } from './grid';
+import { grid as defaultGrid, type Grid, type QuantityName } from './grid';
 import type { SampleTable, Selection } from './atlas';
 import type { Boundaries } from './geometry';
 import { normalizedCoords } from './geometry';
 import { FLAG, type ProfilePoint, type Stat, isLogScale } from './compute';
-import { SpatialHash, framePosition, knnAt, positionAt, type KnnResult } from './knn';
+import { SpatialHash, knnAt, positionAt, type KnnResult } from './knn';
 import { voxelKnnAt, type VoxelSet } from './voxels';
 import { shellField } from './shell';
 
@@ -23,14 +23,13 @@ export function planePoint(plane: Plane, u: number, v: number, offset = 0): [num
 
 export type KnnSamples = { hash: SpatialHash; values: Float64Array; intervals: Float64Array; n: number };
 
-/** Normalized positions of the selected samples in `frame`, indexed for search. */
-export function buildSamples(table: SampleTable, values: Float32Array, frame: FrameName, sel: Selection,
-  cap: number): KnnSamples {
+/** Normalized positions of the selected samples indexed for search. */
+export function buildSamples(table: SampleTable, values: Float32Array, sel: Selection, cap: number): KnnSamples {
   const t = table.base;
   const rows = Array.from(table.rows(sel)).filter((r) => Number.isFinite(values[r]));
   const pos = new Float64Array(rows.length * 3), v = new Float64Array(rows.length), iv = new Float64Array(rows.length);
   rows.forEach((r, i) => {
-    pos.set(framePosition(frame, t.x[r], t.y[r], t.z[r], t.clock_deg[r], t.bx_neg[r] === 1), 3 * i);
+    pos.set([t.x[r], t.y[r], t.z[r]], 3 * i);
     v[i] = values[r]; iv[i] = t.interval[r];
   });
   return { hash: new SpatialHash(pos, cap / 2), values: v, intervals: iv, n: rows.length };
@@ -67,7 +66,8 @@ export type NodeValue = { v: number; flag: number; q25: number; q50: number; q75
  * profile with one node function. `shellValues` use the grid's cell layout ((D, theta, phi) row-major),
  * one node per cell centre; they set the colour range, so it does not change when the depth moves. */
 export function nodeField(evaluate: (p: [number, number, number]) => NodeValue, planes: Plane[],
-  b: Boundaries, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS, shellD = 0.5) {
+  b: Boundaries, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS, shellD = 0.5,
+  planeToAtlas: (p: [number, number, number]) => [number, number, number] = (p) => p) {
   const thetaMax = g.thetaEdges[g.thetaEdges.length - 1];
   const step = (2 * FIELD_HALF) / FIELD_N;
   const fields: PlaneField[] = planes.map((plane) => {
@@ -77,7 +77,7 @@ export function nodeField(evaluate: (p: [number, number, number]) => NodeValue, 
         const p = planePoint(plane, -FIELD_HALF + (i + 0.5) * step, -FIELD_HALF + (j + 0.5) * step, offsets[plane]);
         const { d, thetaDeg } = normalizedCoords(p, b);
         if (!(d >= 0 && d <= 1) || thetaDeg >= thetaMax) continue;
-        const r = evaluate(p);
+        const r = evaluate(planeToAtlas(p));
         values[j * FIELD_N + i] = r.v;
         flags[j * FIELD_N + i] = r.flag;
       }
@@ -129,13 +129,14 @@ export function voxelNode(v: VoxelSet, q: QuantityName, stat: Stat, o: { k: numb
 
 /** k-NN quantiles over the (sub-sampled) samples. */
 export function knnField(s: KnnSamples, q: QuantityName, stat: Stat, planes: Plane[],
-  b: Boundaries, o: KnnOptions, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS, shellD = 0.5) {
-  return { ...nodeField(knnNode(s, q, stat, o, g), planes, b, g, offsets, shellD), log: isLogScale(q, stat, g) };
+  b: Boundaries, o: KnnOptions, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS, shellD = 0.5,
+  planeToAtlas: (p: [number, number, number]) => [number, number, number] = (p) => p) {
+  return { ...nodeField(knnNode(s, q, stat, o, g), planes, b, g, offsets, shellD, planeToAtlas), log: isLogScale(q, stat, g) };
 }
 
 /** k-NN means over the voxel sums of the full data. */
 export function voxelField(v: VoxelSet, q: QuantityName, stat: Stat, planes: Plane[],
   b: Boundaries, o: { k: number; cap: number; factor: number }, g: Grid = defaultGrid, offsets: PlaneOffsets = NO_OFFSETS,
-  shellD = 0.5) {
-  return { ...nodeField(voxelNode(v, q, stat, o, g), planes, b, g, offsets, shellD), log: g.isLog(q) };
+  shellD = 0.5, planeToAtlas: (p: [number, number, number]) => [number, number, number] = (p) => p) {
+  return { ...nodeField(voxelNode(v, q, stat, o, g), planes, b, g, offsets, shellD, planeToAtlas), log: g.isLog(q) };
 }

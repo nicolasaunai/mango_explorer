@@ -41,7 +41,7 @@ export class VoxelFrame {
 
   /** Sum the selected condition bins into one entry per voxel: counts `n`, and each of `sums`. */
   private sumSelected(sel: Selection, n: Typed, sums: Typed[], cell: number, g: Grid) {
-    const cube = this.manifest.cubes[0];
+    const cube = this.manifest.cubes.find((c) => c.frame === this.frame)!;
     const conds = selectedConditions(cube.dims, cube.shape, sel);
     const off = this.base.cond_offsets, vox = this.base.voxel, m = sums.length;
     const index = new Map<number, number>();

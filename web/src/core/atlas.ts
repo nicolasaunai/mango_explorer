@@ -8,16 +8,19 @@ export type CubeEntry = {
   quantities: Record<string, FileEntry>; counts: FileEntry;
   spacecraft?: FileEntry & { names: string[] };
 };
+type HoursEntry = FileEntry & { frame: FrameName; n_rows: number };
+type SamplesEntry = { frame: FrameName; cube: string; fraction: number; n: number; base: FileEntry; quantities: Record<string, FileEntry> };
 export type Manifest = {
   format: string; grid: string; created: string;
-  stats: Record<string, number>;
+  stats: Record<string, Record<string, number>>;
   source: { kind?: string; dataset_version?: string; citation?: string; [k: string]: unknown };
   encoding?: 'gzip';
-  hours: FileEntry & { n_rows: number };
+  hours: HoursEntry[];
   cubes: CubeEntry[];
-  samples?: { cube: string; fraction: number; n: number; base: FileEntry; quantities: Record<string, FileEntry> };
-  voxels?: { size_re: number; frames: { frame: string; base: FileEntry; quantities: Record<string, FileEntry> }[] };
+  samples?: SamplesEntry[];
+  voxels?: { size_re: number; frames: { frame: FrameName; base: FileEntry; quantities: Record<string, FileEntry> }[] };
 };
+export const hoursEntry = (m: Manifest, frame: FrameName) => m.hours.find((h) => h.frame === frame);
 /** True when every voxel frame carries the flow (V) and field (B) vector sums the lines need. */
 export const hasVectors = (m: Manifest | null) =>
   !!m?.voxels?.frames.length && m.voxels.frames.every((f) => 'V_vec_x' in f.quantities && 'B_vec_x' in f.quantities);
@@ -113,27 +116,31 @@ export class CubeView {
   }
 }
 
-/** The k-NN sample table: rows grouped by condition bin of one cube; values in axis space. */
+/** The k-NN sample table of one frame: rows grouped by condition bin of its cube; values in axis space. */
 export class SampleTable {
   private values = new Map<string, Float32Array>();
-  private constructor(readonly manifest: Manifest, readonly base: Record<string, Typed>, private fetchBytes: FetchBytes) {}
+  private constructor(readonly entry: SamplesEntry, readonly cube: CubeEntry, readonly base: Record<string, Typed>,
+    private fetchBytes: FetchBytes) {}
 
-  static async load(manifest: Manifest, fetchBytes: FetchBytes) {
-    if (!manifest.samples) throw new Error('this atlas has no sample table (rebuild it to use k-NN)');
-    return new SampleTable(manifest, await loadSections(fetchBytes, manifest.samples.base), fetchBytes);
+  static async load(manifest: Manifest, frame: FrameName, fetchBytes: FetchBytes) {
+    const entry = manifest.samples?.find((s) => s.frame === frame);
+    if (!entry) throw new Error(`this atlas has no ${frame} sample table (rebuild it to use k-NN)`);
+    const cube = manifest.cubes.find((c) => c.id === entry.cube)!;
+    return new SampleTable(entry, cube, await loadSections(fetchBytes, entry.base), fetchBytes);
   }
+
+  get fraction() { return this.entry.fraction; }
 
   async quantity(q: QuantityName): Promise<Float32Array> {
     if (!this.values.has(q))
-      this.values.set(q, (await loadSections(this.fetchBytes, this.manifest.samples!.quantities[q])).value as Float32Array);
+      this.values.set(q, (await loadSections(this.fetchBytes, this.entry.quantities[q])).value as Float32Array);
     return this.values.get(q)!;
   }
 
   /** Row indices of the samples in the selected condition bins. */
   rows(sel: Selection): Int32Array {
-    const cube = this.manifest.cubes.find((c) => c.id === this.manifest.samples!.cube)!;
     const off = this.base.cond_offsets;
-    const conds = selectedConditions(cube.dims, cube.shape, sel);
+    const conds = selectedConditions(this.cube.dims, this.cube.shape, sel);
     let n = 0;
     for (const c of conds) n += off[c + 1] - off[c];
     const out = new Int32Array(n);

@@ -1,54 +1,27 @@
-// Frames, all rotations about X_GSM; Python reference: src/mango_explorer/atlas/frames.py
-import type { FrameName } from './grid';
-
+// PGSM display rotation and the IMF direction; Python reference: src/mango_explorer/atlas/view.py.
+// The atlas holds PGSM at grid.atlasClockDeg. PGSM at a target clock is the rigid rotation
+// R(a): (Y, Z) -> (Y cos a + Z sin a, -Y sin a + Z cos a) of it, a = clock - atlas clock
+// (space_mango, checked to 1e-13): data rotate, the axes stay fixed. GSM is never rotated.
 export type Vec3 = [number, number, number];
-const DEG = 180 / Math.PI;
+const RAD = Math.PI / 180;
 
 /** Floor modulo, matching Python's % on floats. */
 export const mod = (a: number, n: number) => a - n * Math.floor(a / n);
 
-export const clockAngleDeg = (by: number, bz: number) => mod(Math.atan2(by, bz) * DEG, 360);
-
-export function coneAngleDeg(bx: number, by: number, bz: number): number {
-  const b = Math.hypot(bx, by, bz);
-  return Math.acos(Math.min(1, Math.max(0, Math.abs(bx) / b))) * DEG;
+/** Atlas coordinates -> displayed coordinates for a rotation of `rotationDeg`. */
+export function rotateClock(p: Vec3, rotationDeg: number): Vec3 {
+  const c = Math.cos(rotationDeg * RAD), s = Math.sin(rotationDeg * RAD);
+  return [p[0], p[1] * c + p[2] * s, -p[1] * s + p[2] * c];
 }
 
-export function rotateAboutX(y: number, z: number, angle: number): [number, number] {
-  const c = Math.cos(angle), s = Math.sin(angle);
-  return [y * c - z * s, y * s + z * c];
-}
+/** Displayed coordinates -> atlas coordinates. */
+export const unrotateClock = (p: Vec3, rotationDeg: number): Vec3 => rotateClock(p, -rotationDeg);
 
-/** Rotation angle about X taking GSM to `frame`, and whether magnetic vectors flip sign. */
-export function frameAngle(frame: FrameName, imf: Vec3): { angle: number; flip: boolean } {
-  if (frame === 'GSM') return { angle: 0, flip: false };
-  const clock = Math.atan2(imf[1], imf[2]);
-  if (frame === 'PGSM') return { angle: clock, flip: false };
-  const flip = imf[0] < 0;
-  return { angle: clock + (flip ? Math.PI : 0), flip };
-}
+/** Azimuth atan2(Z, Y) in the atlas of a displayed azimuth (degrees, [0, 360)). */
+export const atlasPhiDeg = (displayPhiDeg: number, rotationDeg: number) => mod(displayPhiDeg + rotationDeg, 360);
 
-export function vectorToFrame(frame: FrameName, v: Vec3, imf: Vec3, magnetic: boolean): Vec3 {
-  const { angle, flip } = frameAngle(frame, imf);
-  const [y, z] = rotateAboutX(v[1], v[2], angle);
-  const s = magnetic && flip ? -1 : 1;
-  return [v[0] * s, y * s, z * s];
-}
-
-export function azimuthInFrameDeg(frame: FrameName, y: number, z: number, imf: Vec3): number {
-  return mod((Math.atan2(z, y) + frameAngle(frame, imf).angle) * DEG, 360);
-}
-
-/** IMF unit vector for a representative (clock, cone, sign of Bx), expressed in `frame`. */
-export function imfDirection(frame: FrameName, clockDeg: number, coneDeg: number, bxSign: 1 | -1): Vec3 {
-  const c = clockDeg / DEG, t = coneDeg / DEG;
-  const gsm: Vec3 = [bxSign * Math.cos(t), Math.sin(t) * Math.sin(c), Math.sin(t) * Math.cos(c)];
-  return vectorToFrame(frame, gsm, gsm, true);
-}
-
-/** Where Z_GSM points once a sample with this IMF is expressed in `frame`. */
-export function zGsmDirection(frame: FrameName, clockDeg: number, bxSign: 1 | -1): Vec3 {
-  const c = clockDeg / DEG;
-  const imf: Vec3 = [bxSign, Math.sin(c), Math.cos(c)];
-  return vectorToFrame(frame, [0, 0, 1], imf, false);
+/** IMF unit vector: clock atan2(By, Bz) (0 = northward, 90 = +Y), cone arccos(Bx/|B|) (0 = sunward). */
+export function imfDirection(clockDeg: number, coneDeg: number): Vec3 {
+  const c = clockDeg * RAD, t = coneDeg * RAD;
+  return [Math.cos(t), Math.sin(t) * Math.sin(c), Math.sin(t) * Math.cos(c)];
 }

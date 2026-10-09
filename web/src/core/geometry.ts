@@ -1,7 +1,7 @@
 // Physical position <-> grid cell, for picking and for placing probe markers.
 import { grid as defaultGrid, type Grid } from './grid';
 import { cellCoords, spatialCell } from './binning';
-import { mod } from './frames';
+import { mod, unrotateClock, type Vec3 } from './frames';
 
 export type RadiusFn = (theta: number) => number;
 export type Boundaries = { rMp: RadiusFn; rBs: RadiusFn };
@@ -21,6 +21,11 @@ export function cellAt(p: [number, number, number], b: Boundaries, g: Grid = def
   if (!(d >= 0 && d <= 1)) return null;
   const c = spatialCell(d, thetaDeg, phiDeg, g);
   return c < 0 ? null : c;
+}
+
+/** Grid cell under a displayed position (PGSM shown at a rotation), or null outside the sheath. */
+export function cellAtDisplay(p: Vec3, b: Boundaries, rotationDeg: number, g: Grid = defaultGrid): number | null {
+  return cellAt(unrotateClock(p, rotationDeg), b, g);
 }
 
 /** Bin ranges of a cell. */

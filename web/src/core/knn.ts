@@ -1,17 +1,9 @@
 // k-nearest-neighbour statistics on MANGO's normalized positions; Python reference: src/mango_explorer/atlas/knn.py.
 // A node gets the quartiles of its k nearest samples, or NaN when the distance of the
 // ceil(k/2)-th nearest exceeds the cap. Only neighbours within factor * cap are searched.
-import type { FrameName } from './grid';
 import type { Boundaries } from './geometry';
 
 const RAD = Math.PI / 180;
-
-/** A normalized GSM position expressed in `frame`, from the sample's IMF clock angle and Bx sign. */
-export function framePosition(frame: FrameName, x: number, y: number, z: number, clockDeg: number, bxNeg: boolean): [number, number, number] {
-  if (frame === 'GSM') return [x, y, z];
-  const a = (clockDeg + (frame === 'PGSM_fold' && bxNeg ? 180 : 0)) * RAD, c = Math.cos(a), s = Math.sin(a);
-  return [x, y * c - z * s, y * s + z * c];
-}
 
 /** Position (X, Y, Z) in R_E at depth D and angles (theta, phi) between the given boundaries. */
 export function positionAt(d: number, thetaDeg: number, phiDeg: number, b: Boundaries): [number, number, number] {

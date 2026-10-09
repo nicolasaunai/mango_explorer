@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url';
 import golden from '$golden/core.json';
 import { grid } from './grid';
 import { jelinekBs, jelinekMp, shueAlpha, shueMp, shueR0 } from './boundaries';
-import { azimuthInFrameDeg, clockAngleDeg, coneAngleDeg, vectorToFrame, type Vec3 } from './frames';
 import { histBin, spatialCell } from './binning';
 import { histQuantile } from './stats';
 import { CubeView, loadManifest, type FetchBytes } from './atlas';
@@ -15,7 +14,9 @@ const close = (a: number, b: number, rel = 1e-9, abs = 1e-9) =>
 describe('grid', () => {
   it('matches the Python grid', () => {
     expect(grid.spatialShape).toEqual([10, 20, 24]);
-    expect(grid.cubeShape('clock-cone-Ma')).toEqual([12, 6, 5]);
+    expect(grid.cubeShape('clock-cone-Ma')).toEqual([12, 12, 5]);
+    expect(grid.cubeShape('cone-Ma')).toEqual([12, 5]);
+    expect(grid.frameConditions('PGSM')).not.toContain('clock_deg');
     expect(golden.grid).toBe(grid.raw.version);
   });
 });
@@ -30,30 +31,6 @@ describe('boundaries', () => {
         close(shueMp(t, c.shue_r0, c.shue_alpha), c.shue_mp[i]);
         close(jelinekBs(t, c.pd), c.jelinek_bs[i]);
         close(jelinekMp(t, c.pd), c.jelinek_mp[i]);
-      });
-    });
-  }
-});
-
-describe('frames', () => {
-  const f = golden.frames;
-  it('clock and cone angles', () => {
-    f.imf.forEach((b, i) => {
-      close(clockAngleDeg(b[1], b[2]), f.clock_deg[i]);
-      close(coneAngleDeg(b[0], b[1], b[2]), f.cone_deg[i]);
-    });
-  });
-  for (const [name, ref] of Object.entries(f.frames)) {
-    it(`vectors and azimuths in ${name}`, () => {
-      f.vec.forEach((v, i) => {
-        const imf = f.imf[i] as Vec3;
-        const p = vectorToFrame(name as never, v as Vec3, imf, false);
-        const m = vectorToFrame(name as never, v as Vec3, imf, true);
-        p.forEach((x, k) => close(x, ref.position[i][k]));
-        m.forEach((x, k) => close(x, ref.magnetic[i][k]));
-        const az = azimuthInFrameDeg(name as never, v[1], v[2], imf);
-        const d = ((az - ref.azimuth_deg[i] + 540) % 360) - 180;
-        close(d, 0, 0, 1e-8);
       });
     });
   }
@@ -106,14 +83,18 @@ describe('hour table', () => {
     const buf = await readFile(root + p);
     return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
   };
-  it('gives exact counts and clock marginals', async () => {
-    const { loadSections } = await import('./atlas');
+  it('gives exact counts and clock marginals; ignores conditions it does not hold', async () => {
+    const { loadSections, hoursEntry } = await import('./atlas');
     const { HourTable } = await import('./hours');
-    const ref = golden.atlas_mini;
+    const ref = golden.atlas_mini.hours;
     const manifest = await loadManifest(fetchBytes);
-    const table = new HourTable(await loadSections(fetchBytes, manifest.hours));
-    expect(table.counts(ref.selection)).toEqual({ n: ref.hours_n, neff: ref.hours_neff });
+    const table = new HourTable(await loadSections(fetchBytes, hoursEntry(manifest, 'GSM')!));
+    expect(table.counts(ref.selection)).toEqual({ n: ref.n, neff: ref.neff });
     expect(table.marginal('clock_deg', ref.selection).map((c) => c.neff)).toEqual(ref.clock_marginal_neff);
+    const pgsm = new HourTable(await loadSections(fetchBytes, hoursEntry(manifest, 'PGSM')!));
+    // a PGSM table holds no clock column: a clock selection is ignored, not a crash
+    expect(pgsm.counts({ clock_deg: [3] }).n).toBe(ref.pgsm_n);
+    expect(pgsm.marginal('clock_deg', {}).every((c) => c.n === 0)).toBe(true);
   });
 });
 
@@ -130,15 +111,15 @@ describe('k-NN', () => {
   });
   it('reproduces the Python k-NN statistics', async () => {
     const { SampleTable } = await import('./atlas');
-    const { SpatialHash, framePosition, knnAt } = await import('./knn');
+    const { SpatialHash, knnAt } = await import('./knn');
     const ref = golden.atlas_mini, kn = ref.knn;
-    const table = await SampleTable.load(await loadManifest(fetchBytes), fetchBytes);
+    const table = await SampleTable.load(await loadManifest(fetchBytes), 'PGSM', fetchBytes);
     const rows = table.rows(ref.selection);
     expect(rows.length).toBe(kn.n_samples);
     const t = table.base, vals = await table.quantity('Np_ratio');
     const pos = new Float64Array(rows.length * 3), v = new Float64Array(rows.length), iv = new Float64Array(rows.length);
     rows.forEach((r, i) => {
-      pos.set(framePosition('PGSM_fold', t.x[r], t.y[r], t.z[r], t.clock_deg[r], t.bx_neg[r] === 1), 3 * i);
+      pos.set([t.x[r], t.y[r], t.z[r]], 3 * i);
       v[i] = vals[r]; iv[i] = t.interval[r];
     });
     const hash = new SpatialHash(pos, kn.cap);
@@ -175,7 +156,7 @@ describe('voxel k-NN', () => {
   it('reproduces the Python voxel k-NN (1/d-weighted and plain means)', async () => {
     const { VoxelFrame, voxelKnnAt } = await import('./voxels');
     const ref = golden.atlas_mini, gv = ref.voxel_knn;
-    const frame = await VoxelFrame.load(await loadManifest(fetchBytes), 'PGSM_fold', fetchBytes);
+    const frame = await VoxelFrame.load(await loadManifest(fetchBytes), 'PGSM', fetchBytes);
     const set = await frame.select('Np_ratio', ref.selection, gv.cap / 2);
     expect(set.total).toBe(gv.n_selected);
     expect(set.vid.length).toBe(gv.n_voxels_selected);
@@ -193,7 +174,7 @@ describe('voxel k-NN', () => {
   it('reproduces the Python vector voxel k-NN (V and B)', async () => {
     const { VoxelFrame, voxelVectorAt } = await import('./voxels');
     const ref = golden.atlas_mini, gv = ref.vector_knn;
-    const frame = await VoxelFrame.load(await loadManifest(fetchBytes), 'PGSM_fold', fetchBytes);
+    const frame = await VoxelFrame.load(await loadManifest(fetchBytes), 'PGSM', fetchBytes);
     for (const name of ['V_vec', 'B_vec'] as const) {
       const set = await frame.selectVector(name, ref.selection, gv.cap / 2);
       gv.nodes.forEach((node, i) => {
@@ -208,7 +189,7 @@ describe('voxel k-NN', () => {
     const { VoxelFrame } = await import('./voxels');
     const m = structuredClone(await loadManifest(fetchBytes));
     for (const f of m.voxels!.frames) for (const c of 'xyz') delete f.quantities[`B_vec_${c}`];
-    const frame = await VoxelFrame.load(m, 'PGSM_fold', fetchBytes);
+    const frame = await VoxelFrame.load(m, 'PGSM', fetchBytes);
     await expect(frame.selectVector('B_vec', golden.atlas_mini.selection, 1)).rejects.toThrow(/no B_vec voxel sums/);
   });
   it('tells whether every voxel frame carries the V and B vector sums', async () => {
@@ -216,10 +197,7 @@ describe('voxel k-NN', () => {
     const m = await loadManifest(fetchBytes);
     expect(hasVectors(m)).toBe(true);
     const noB = structuredClone(m);
-    const other = structuredClone(noB.voxels!.frames[0]);  // a second frame without B
-    other.frame = 'GSM';
-    delete other.quantities.B_vec_x;
-    noB.voxels!.frames.push(other);
+    delete noB.voxels!.frames.find((f) => f.frame === 'GSM')!.quantities.B_vec_x;
     expect(hasVectors(noB)).toBe(false);
     const noV = structuredClone(m);
     for (const f of noV.voxels!.frames) for (const c of 'xyz') delete f.quantities[`V_vec_${c}`];

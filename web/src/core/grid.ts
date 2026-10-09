@@ -1,5 +1,5 @@
-// The binning contract shared with the Python pipeline (src/mango_explorer/spec/grid-v2.json).
-import spec from '$spec/grid-v2.json';
+// The binning contract shared with the Python pipeline (src/mango_explorer/spec/grid-v3.json).
+import spec from '$spec/grid-v3.json';
 
 type EdgeSpec = { edges?: number[]; edges_range?: number[] };
 export type QuantityName = keyof typeof spec.quantities;
@@ -31,6 +31,20 @@ export class Grid {
   readonly frames = Object.keys(spec.frames) as FrameName[];
   readonly spacecraft = spec.spacecraft;
   readonly reliability = spec.reliability;
+  readonly atlasClockDeg: number = spec.pgsm.atlas_clock_deg;
+
+  /** Conditions that apply to a frame (a condition without "frames" applies to every frame). */
+  frameConditions(frame: FrameName): ConditionName[] {
+    return this.conditionNames.filter((n) => {
+      const f = (spec.conditions[n] as { frames?: string[] }).frames;
+      return !f || f.includes(frame);
+    });
+  }
+  cubeOfFrame(frame: FrameName): string {
+    const c = spec.cubes.find((x) => x.frame === frame);
+    if (!c) throw new Error(`no cube for frame ${frame}`);
+    return c.id;
+  }
 
   conditionEdges(name: ConditionName): number[] {
     return edgesOf(spec.conditions[name] as EdgeSpec);

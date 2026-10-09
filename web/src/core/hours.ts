@@ -14,7 +14,7 @@ export class HourTable {
 
   private masks(sel: Selection) {
     return (Object.entries(sel) as [ConditionName, number[] | null][])
-      .filter(([, bins]) => bins != null)
+      .filter(([name, bins]) => bins != null && name in this.cols)
       .map(([name, bins]) => {
         const allowed = new Uint8Array(256);
         for (const b of bins!) allowed[b] = 1;
@@ -38,6 +38,7 @@ export class HourTable {
   /** N_eff in each bin of `dim`, with every other condition of `sel` applied (crossfilter). */
   marginal(dim: ConditionName, sel: Selection): Counts[] {
     const nb = this.grid.conditionEdges(dim).length - 1;
+    if (!(dim in this.cols)) return Array.from({ length: nb }, () => ({ n: 0, neff: 0 }));
     const others = this.masks({ ...sel, [dim]: null });
     const col = this.cols[dim];
     const { sc, interval, n } = this.cols;
