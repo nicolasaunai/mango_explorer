@@ -1,82 +1,149 @@
 {
- "format": "mango-atlas/1",
- "grid": "grid-v2",
- "created": "2026-10-09T09:57:30+00:00",
+ "format": "mango-atlas/2",
+ "grid": "grid-v3",
+ "created": "2026-10-09T16:16:33+00:00",
  "source": {
   "kind": "synthetic"
  },
  "stats": {
-  "rows_in": 29520,
-  "rows_kept": 29432,
-  "dropped_row_filter": 88,
-  "dropped_outside_shell_or_theta": 2824,
-  "rows_with_vectors": 29432
+  "GSM": {
+   "rows_in": 29520,
+   "rows_kept": 29432,
+   "dropped_row_filter": 88,
+   "dropped_outside_shell_or_theta": 2824,
+   "rows_with_vectors": 29432
+  },
+  "PGSM": {
+   "rows_in": 58864,
+   "rows_kept": 58864,
+   "dropped_row_filter": 0,
+   "dropped_outside_shell_or_theta": 5648,
+   "rows_with_vectors": 58864
+  }
  },
- "build_seconds": 0.1,
- "hours": {
-  "path": "hours.bin",
-  "n_rows": 41,
-  "sections": [
-   {
-    "name": "interval",
-    "dtype": "int32",
-    "length": 41,
-    "offset": 0
-   },
-   {
-    "name": "n",
-    "dtype": "uint32",
-    "length": 41,
-    "offset": 164
-   },
-   {
-    "name": "sc",
-    "dtype": "uint8",
-    "length": 41,
-    "offset": 328
-   },
-   {
-    "name": "V_sw",
-    "dtype": "uint8",
-    "length": 41,
-    "offset": 369
-   },
-   {
-    "name": "Beta_sw",
-    "dtype": "uint8",
-    "length": 41,
-    "offset": 410
-   },
-   {
-    "name": "Pd_sw",
-    "dtype": "uint8",
-    "length": 41,
-    "offset": 451
-   },
-   {
-    "name": "Ma_sw",
-    "dtype": "uint8",
-    "length": 41,
-    "offset": 492
-   },
-   {
-    "name": "cone_deg",
-    "dtype": "uint8",
-    "length": 41,
-    "offset": 533
-   },
-   {
-    "name": "clock_deg",
-    "dtype": "uint8",
-    "length": 41,
-    "offset": 574
-   }
-  ]
- },
+ "build_seconds": 0.27,
+ "hours": [
+  {
+   "frame": "GSM",
+   "path": "hours/GSM.bin",
+   "n_rows": 41,
+   "sections": [
+    {
+     "name": "interval",
+     "dtype": "int32",
+     "length": 41,
+     "offset": 0
+    },
+    {
+     "name": "n",
+     "dtype": "uint32",
+     "length": 41,
+     "offset": 164
+    },
+    {
+     "name": "sc",
+     "dtype": "uint8",
+     "length": 41,
+     "offset": 328
+    },
+    {
+     "name": "V_sw",
+     "dtype": "uint8",
+     "length": 41,
+     "offset": 369
+    },
+    {
+     "name": "Beta_sw",
+     "dtype": "uint8",
+     "length": 41,
+     "offset": 410
+    },
+    {
+     "name": "Pd_sw",
+     "dtype": "uint8",
+     "length": 41,
+     "offset": 451
+    },
+    {
+     "name": "Ma_sw",
+     "dtype": "uint8",
+     "length": 41,
+     "offset": 492
+    },
+    {
+     "name": "cone_deg",
+     "dtype": "uint8",
+     "length": 41,
+     "offset": 533
+    },
+    {
+     "name": "clock_deg",
+     "dtype": "uint8",
+     "length": 41,
+     "offset": 574
+    }
+   ]
+  },
+  {
+   "frame": "PGSM",
+   "path": "hours/PGSM.bin",
+   "n_rows": 82,
+   "sections": [
+    {
+     "name": "interval",
+     "dtype": "int32",
+     "length": 82,
+     "offset": 0
+    },
+    {
+     "name": "n",
+     "dtype": "uint32",
+     "length": 82,
+     "offset": 328
+    },
+    {
+     "name": "sc",
+     "dtype": "uint8",
+     "length": 82,
+     "offset": 656
+    },
+    {
+     "name": "V_sw",
+     "dtype": "uint8",
+     "length": 82,
+     "offset": 738
+    },
+    {
+     "name": "Beta_sw",
+     "dtype": "uint8",
+     "length": 82,
+     "offset": 820
+    },
+    {
+     "name": "Pd_sw",
+     "dtype": "uint8",
+     "length": 82,
+     "offset": 902
+    },
+    {
+     "name": "Ma_sw",
+     "dtype": "uint8",
+     "length": 82,
+     "offset": 984
+    },
+    {
+     "name": "cone_deg",
+     "dtype": "uint8",
+     "length": 82,
+     "offset": 1066
+    }
+   ]
+  }
+ ],
  "cubes": [
   {
    "id": "clock-cone-Ma",
-   "frame": "PGSM_fold",
+   "frame": "GSM",
    "dims": [
     "clock_deg",
     "cone_deg",
@@ -84,286 +151,286 @@
    ],
    "shape": [
     12,
-    6,
+    12,
     5
    ],
    "quantities": {
     "Np": {
-     "path": "cubes/clock-cone-Ma/PGSM_fold/Np.bin",
+     "path": "cubes/clock-cone-Ma/GSM/Np.bin",
      "sections": [
       {
        "name": "cond_offsets",
        "dtype": "uint32",
-       "length": 361,
+       "length": 721,
        "offset": 0
       },
       {
        "name": "count",
        "dtype": "uint32",
-       "length": 859,
-       "offset": 1444
+       "length": 855,
+       "offset": 2884
       },
       {
        "name": "cell",
        "dtype": "uint16",
-       "length": 859,
-       "offset": 4880
+       "length": 855,
+       "offset": 6304
       },
       {
        "name": "hbin",
        "dtype": "uint8",
-       "length": 859,
-       "offset": 6598
+       "length": 855,
+       "offset": 8014
       }
      ]
     },
     "Tp": {
-     "path": "cubes/clock-cone-Ma/PGSM_fold/Tp.bin",
+     "path": "cubes/clock-cone-Ma/GSM/Tp.bin",
      "sections": [
       {
        "name": "cond_offsets",
        "dtype": "uint32",
-       "length": 361,
+       "length": 721,
        "offset": 0
       },
       {
        "name": "count",
        "dtype": "uint32",
        "length": 223,
-       "offset": 1444
+       "offset": 2884
       },
       {
        "name": "cell",
        "dtype": "uint16",
        "length": 223,
-       "offset": 2336
+       "offset": 3776
       },
       {
        "name": "hbin",
        "dtype": "uint8",
        "length": 223,
-       "offset": 2782
+       "offset": 4222
       }
      ]
     },
     "B": {
-     "path": "cubes/clock-cone-Ma/PGSM_fold/B.bin",
+     "path": "cubes/clock-cone-Ma/GSM/B.bin",
      "sections": [
       {
        "name": "cond_offsets",
        "dtype": "uint32",
-       "length": 361,
+       "length": 721,
        "offset": 0
       },
       {
        "name": "count",
        "dtype": "uint32",
-       "length": 1080,
-       "offset": 1444
+       "length": 1079,
+       "offset": 2884
       },
       {
        "name": "cell",
        "dtype": "uint16",
-       "length": 1080,
-       "offset": 5764
+       "length": 1079,
+       "offset": 7200
       },
       {
        "name": "hbin",
        "dtype": "uint8",
-       "length": 1080,
-       "offset": 7924
+       "length": 1079,
+       "offset": 9358
       }
      ]
     },
     "V": {
-     "path": "cubes/clock-cone-Ma/PGSM_fold/V.bin",
+     "path": "cubes/clock-cone-Ma/GSM/V.bin",
      "sections": [
       {
        "name": "cond_offsets",
        "dtype": "uint32",
-       "length": 361,
+       "length": 721,
        "offset": 0
       },
       {
        "name": "count",
        "dtype": "uint32",
-       "length": 242,
-       "offset": 1444
+       "length": 241,
+       "offset": 2884
       },
       {
        "name": "cell",
        "dtype": "uint16",
-       "length": 242,
-       "offset": 2412
+       "length": 241,
+       "offset": 3848
       },
       {
        "name": "hbin",
        "dtype": "uint8",
-       "length": 242,
-       "offset": 2896
+       "length": 241,
+       "offset": 4330
       }
      ]
     },
     "Np_ratio": {
-     "path": "cubes/clock-cone-Ma/PGSM_fold/Np_ratio.bin",
+     "path": "cubes/clock-cone-Ma/GSM/Np_ratio.bin",
      "sections": [
       {
        "name": "cond_offsets",
        "dtype": "uint32",
-       "length": 361,
+       "length": 721,
        "offset": 0
       },
       {
        "name": "count",
        "dtype": "uint32",
-       "length": 1219,
-       "offset": 1444
+       "length": 1221,
+       "offset": 2884
       },
       {
        "name": "cell",
        "dtype": "uint16",
-       "length": 1219,
-       "offset": 6320
+       "length": 1221,
+       "offset": 7768
       },
       {
        "name": "hbin",
        "dtype": "uint8",
-       "length": 1219,
-       "offset": 8758
+       "length": 1221,
+       "offset": 10210
       }
      ]
     },
     "B_ratio": {
-     "path": "cubes/clock-cone-Ma/PGSM_fold/B_ratio.bin",
+     "path": "cubes/clock-cone-Ma/GSM/B_ratio.bin",
      "sections": [
       {
        "name": "cond_offsets",
        "dtype": "uint32",
-       "length": 361,
+       "length": 721,
        "offset": 0
       },
       {
        "name": "count",
        "dtype": "uint32",
-       "length": 1258,
-       "offset": 1444
+       "length": 1257,
+       "offset": 2884
       },
       {
        "name": "cell",
        "dtype": "uint16",
-       "length": 1258,
-       "offset": 6476
+       "length": 1257,
+       "offset": 7912
       },
       {
        "name": "hbin",
        "dtype": "uint8",
-       "length": 1258,
-       "offset": 8992
+       "length": 1257,
+       "offset": 10426
       }
      ]
     },
     "Tp_ratio": {
-     "path": "cubes/clock-cone-Ma/PGSM_fold/Tp_ratio.bin",
+     "path": "cubes/clock-cone-Ma/GSM/Tp_ratio.bin",
      "sections": [
       {
        "name": "cond_offsets",
        "dtype": "uint32",
-       "length": 361,
+       "length": 721,
        "offset": 0
       },
       {
        "name": "count",
        "dtype": "uint32",
        "length": 229,
-       "offset": 1444
+       "offset": 2884
       },
       {
        "name": "cell",
        "dtype": "uint16",
        "length": 229,
-       "offset": 2360
+       "offset": 3800
       },
       {
        "name": "hbin",
        "dtype": "uint8",
        "length": 229,
-       "offset": 2818
+       "offset": 4258
       }
      ]
     },
     "V_ratio": {
-     "path": "cubes/clock-cone-Ma/PGSM_fold/V_ratio.bin",
+     "path": "cubes/clock-cone-Ma/GSM/V_ratio.bin",
      "sections": [
       {
        "name": "cond_offsets",
        "dtype": "uint32",
-       "length": 361,
+       "length": 721,
        "offset": 0
       },
       {
        "name": "count",
        "dtype": "uint32",
        "length": 245,
-       "offset": 1444
+       "offset": 2884
       },
       {
        "name": "cell",
        "dtype": "uint16",
        "length": 245,
-       "offset": 2424
+       "offset": 3864
       },
       {
        "name": "hbin",
        "dtype": "uint8",
        "length": 245,
-       "offset": 2914
+       "offset": 4354
       }
      ]
     }
    },
    "counts": {
-    "path": "cubes/clock-cone-Ma/PGSM_fold/counts.bin",
+    "path": "cubes/clock-cone-Ma/GSM/counts.bin",
     "sections": [
      {
       "name": "n_cond_offsets",
       "dtype": "uint32",
-      "length": 361,
+      "length": 721,
       "offset": 0
      },
      {
       "name": "n",
       "dtype": "uint32",
       "length": 177,
-      "offset": 1444
+      "offset": 2884
      },
      {
       "name": "neff_cond_offsets",
       "dtype": "uint32",
-      "length": 361,
-      "offset": 2152
+      "length": 721,
+      "offset": 3592
      },
      {
       "name": "neff",
       "dtype": "uint32",
       "length": 177,
-      "offset": 3596
+      "offset": 6476
      },
      {
       "name": "n_cell",
       "dtype": "uint16",
       "length": 177,
-      "offset": 4304
+      "offset": 7184
      },
      {
       "name": "neff_cell",
       "dtype": "uint16",
       "length": 177,
-      "offset": 4658
+      "offset": 7538
      }
     ]
    },
    "spacecraft": {
-    "path": "cubes/clock-cone-Ma/PGSM_fold/spacecraft.bin",
+    "path": "cubes/clock-cone-Ma/GSM/spacecraft.bin",
     "names": [
      "THA",
      "THB",
@@ -379,296 +446,1140 @@
      {
       "name": "cond_offsets",
       "dtype": "uint32",
-      "length": 361,
+      "length": 721,
       "offset": 0
      },
      {
       "name": "n",
       "dtype": "uint32",
       "length": 177,
-      "offset": 1444
+      "offset": 2884
      },
      {
       "name": "cell",
       "dtype": "uint16",
       "length": 177,
-      "offset": 2152
+      "offset": 3592
      },
      {
       "name": "sc",
       "dtype": "uint8",
       "length": 177,
-      "offset": 2506
+      "offset": 3946
+     }
+    ]
+   }
+  },
+  {
+   "id": "cone-Ma",
+   "frame": "PGSM",
+   "dims": [
+    "cone_deg",
+    "Ma_sw"
+   ],
+   "shape": [
+    12,
+    5
+   ],
+   "quantities": {
+    "Np": {
+     "path": "cubes/cone-Ma/PGSM/Np.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 61,
+       "offset": 0
+      },
+      {
+       "name": "count",
+       "dtype": "uint32",
+       "length": 1718,
+       "offset": 244
+      },
+      {
+       "name": "cell",
+       "dtype": "uint16",
+       "length": 1718,
+       "offset": 7116
+      },
+      {
+       "name": "hbin",
+       "dtype": "uint8",
+       "length": 1718,
+       "offset": 10552
+      }
+     ]
+    },
+    "Tp": {
+     "path": "cubes/cone-Ma/PGSM/Tp.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 61,
+       "offset": 0
+      },
+      {
+       "name": "count",
+       "dtype": "uint32",
+       "length": 446,
+       "offset": 244
+      },
+      {
+       "name": "cell",
+       "dtype": "uint16",
+       "length": 446,
+       "offset": 2028
+      },
+      {
+       "name": "hbin",
+       "dtype": "uint8",
+       "length": 446,
+       "offset": 2920
+      }
+     ]
+    },
+    "B": {
+     "path": "cubes/cone-Ma/PGSM/B.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 61,
+       "offset": 0
+      },
+      {
+       "name": "count",
+       "dtype": "uint32",
+       "length": 2160,
+       "offset": 244
+      },
+      {
+       "name": "cell",
+       "dtype": "uint16",
+       "length": 2160,
+       "offset": 8884
+      },
+      {
+       "name": "hbin",
+       "dtype": "uint8",
+       "length": 2160,
+       "offset": 13204
+      }
+     ]
+    },
+    "V": {
+     "path": "cubes/cone-Ma/PGSM/V.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 61,
+       "offset": 0
+      },
+      {
+       "name": "count",
+       "dtype": "uint32",
+       "length": 484,
+       "offset": 244
+      },
+      {
+       "name": "cell",
+       "dtype": "uint16",
+       "length": 484,
+       "offset": 2180
+      },
+      {
+       "name": "hbin",
+       "dtype": "uint8",
+       "length": 484,
+       "offset": 3148
+      }
+     ]
+    },
+    "Np_ratio": {
+     "path": "cubes/cone-Ma/PGSM/Np_ratio.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 61,
+       "offset": 0
+      },
+      {
+       "name": "count",
+       "dtype": "uint32",
+       "length": 2438,
+       "offset": 244
+      },
+      {
+       "name": "cell",
+       "dtype": "uint16",
+       "length": 2438,
+       "offset": 9996
+      },
+      {
+       "name": "hbin",
+       "dtype": "uint8",
+       "length": 2438,
+       "offset": 14872
+      }
+     ]
+    },
+    "B_ratio": {
+     "path": "cubes/cone-Ma/PGSM/B_ratio.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 61,
+       "offset": 0
+      },
+      {
+       "name": "count",
+       "dtype": "uint32",
+       "length": 2516,
+       "offset": 244
+      },
+      {
+       "name": "cell",
+       "dtype": "uint16",
+       "length": 2516,
+       "offset": 10308
+      },
+      {
+       "name": "hbin",
+       "dtype": "uint8",
+       "length": 2516,
+       "offset": 15340
+      }
+     ]
+    },
+    "Tp_ratio": {
+     "path": "cubes/cone-Ma/PGSM/Tp_ratio.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 61,
+       "offset": 0
+      },
+      {
+       "name": "count",
+       "dtype": "uint32",
+       "length": 458,
+       "offset": 244
+      },
+      {
+       "name": "cell",
+       "dtype": "uint16",
+       "length": 458,
+       "offset": 2076
+      },
+      {
+       "name": "hbin",
+       "dtype": "uint8",
+       "length": 458,
+       "offset": 2992
+      }
+     ]
+    },
+    "V_ratio": {
+     "path": "cubes/cone-Ma/PGSM/V_ratio.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 61,
+       "offset": 0
+      },
+      {
+       "name": "count",
+       "dtype": "uint32",
+       "length": 490,
+       "offset": 244
+      },
+      {
+       "name": "cell",
+       "dtype": "uint16",
+       "length": 490,
+       "offset": 2204
+      },
+      {
+       "name": "hbin",
+       "dtype": "uint8",
+       "length": 490,
+       "offset": 3184
+      }
+     ]
+    }
+   },
+   "counts": {
+    "path": "cubes/cone-Ma/PGSM/counts.bin",
+    "sections": [
+     {
+      "name": "n_cond_offsets",
+      "dtype": "uint32",
+      "length": 61,
+      "offset": 0
+     },
+     {
+      "name": "n",
+      "dtype": "uint32",
+      "length": 354,
+      "offset": 244
+     },
+     {
+      "name": "neff_cond_offsets",
+      "dtype": "uint32",
+      "length": 61,
+      "offset": 1660
+     },
+     {
+      "name": "neff",
+      "dtype": "uint32",
+      "length": 354,
+      "offset": 1904
+     },
+     {
+      "name": "n_cell",
+      "dtype": "uint16",
+      "length": 354,
+      "offset": 3320
+     },
+     {
+      "name": "neff_cell",
+      "dtype": "uint16",
+      "length": 354,
+      "offset": 4028
+     }
+    ]
+   },
+   "spacecraft": {
+    "path": "cubes/cone-Ma/PGSM/spacecraft.bin",
+    "names": [
+     "THA",
+     "THB",
+     "THC",
+     "THD",
+     "THE",
+     "C1",
+     "C3",
+     "MMS",
+     "DS1"
+    ],
+    "sections": [
+     {
+      "name": "cond_offsets",
+      "dtype": "uint32",
+      "length": 61,
+      "offset": 0
+     },
+     {
+      "name": "n",
+      "dtype": "uint32",
+      "length": 354,
+      "offset": 244
+     },
+     {
+      "name": "cell",
+      "dtype": "uint16",
+      "length": 354,
+      "offset": 1660
+     },
+     {
+      "name": "sc",
+      "dtype": "uint8",
+      "length": 354,
+      "offset": 2368
      }
     ]
    }
   }
  ],
- "js_types": {
-  "uint32": "Uint32Array",
-  "int32": "Int32Array",
-  "uint16": "Uint16Array",
-  "uint8": "Uint8Array",
-  "float32": "Float32Array"
- },
+ "samples": [
+  {
+   "frame": "GSM",
+   "cube": "clock-cone-Ma",
+   "fraction": 0.5,
+   "n": 13297,
+   "base": {
+    "path": "samples/GSM/base.bin",
+    "sections": [
+     {
+      "name": "cond_offsets",
+      "dtype": "uint32",
+      "length": 721,
+      "offset": 0
+     },
+     {
+      "name": "x",
+      "dtype": "float32",
+      "length": 13297,
+      "offset": 2884
+     },
+     {
+      "name": "y",
+      "dtype": "float32",
+      "length": 13297,
+      "offset": 56072
+     },
+     {
+      "name": "z",
+      "dtype": "float32",
+      "length": 13297,
+      "offset": 109260
+     },
+     {
+      "name": "interval",
+      "dtype": "uint32",
+      "length": 13297,
+      "offset": 162448
+     }
+    ]
+   },
+   "quantities": {
+    "Np": {
+     "path": "samples/GSM/Np.bin",
+     "sections": [
+      {
+       "name": "value",
+       "dtype": "float32",
+       "length": 13297,
+       "offset": 0
+      }
+     ]
+    },
+    "Tp": {
+     "path": "samples/GSM/Tp.bin",
+     "sections": [
+      {
+       "name": "value",
+       "dtype": "float32",
+       "length": 13297,
+       "offset": 0
+      }
+     ]
+    },
+    "B": {
+     "path": "samples/GSM/B.bin",
+     "sections": [
+      {
+       "name": "value",
+       "dtype": "float32",
+       "length": 13297,
+       "offset": 0
+      }
+     ]
+    },
+    "V": {
+     "path": "samples/GSM/V.bin",
+     "sections": [
+      {
+       "name": "value",
+       "dtype": "float32",
+       "length": 13297,
+       "offset": 0
+      }
+     ]
+    },
+    "Np_ratio": {
+     "path": "samples/GSM/Np_ratio.bin",
+     "sections": [
+      {
+       "name": "value",
+       "dtype": "float32",
+       "length": 13297,
+       "offset": 0
+      }
+     ]
+    },
+    "B_ratio": {
+     "path": "samples/GSM/B_ratio.bin",
+     "sections": [
+      {
+       "name": "value",
+       "dtype": "float32",
+       "length": 13297,
+       "offset": 0
+      }
+     ]
+    },
+    "Tp_ratio": {
+     "path": "samples/GSM/Tp_ratio.bin",
+     "sections": [
+      {
+       "name": "value",
+       "dtype": "float32",
+       "length": 13297,
+       "offset": 0
+      }
+     ]
+    },
+    "V_ratio": {
+     "path": "samples/GSM/V_ratio.bin",
+     "sections": [
+      {
+       "name": "value",
+       "dtype": "float32",
+       "length": 13297,
+       "offset": 0
+      }
+     ]
+    }
+   }
+  },
+  {
+   "frame": "PGSM",
+   "cube": "cone-Ma",
+   "fraction": 0.5,
+   "n": 26594,
+   "base": {
+    "path": "samples/PGSM/base.bin",
+    "sections": [
+     {
+      "name": "cond_offsets",
+      "dtype": "uint32",
+      "length": 61,
+      "offset": 0
+     },
+     {
+      "name": "x",
+      "dtype": "float32",
+      "length": 26594,
+      "offset": 244
+     },
+     {
+      "name": "y",
+      "dtype": "float32",
+      "length": 26594,
+      "offset": 106620
+     },
+     {
+      "name": "z",
+      "dtype": "float32",
+      "length": 26594,
+      "offset": 212996
+     },
+     {
+      "name": "interval",
+      "dtype": "uint32",
+      "length": 26594,
+      "offset": 319372
+     }
+    ]
+   },
+   "quantities": {
+    "Np": {
+     "path": "samples/PGSM/Np.bin",
+     "sections": [
+      {
+       "name": "value",
+       "dtype": "float32",
+       "length": 26594,
+       "offset": 0
+      }
+     ]
+    },
+    "Tp": {
+     "path": "samples/PGSM/Tp.bin",
+     "sections": [
+      {
+       "name": "value",
+       "dtype": "float32",
+       "length": 26594,
+       "offset": 0
+      }
+     ]
+    },
+    "B": {
+     "path": "samples/PGSM/B.bin",
+     "sections": [
+      {
+       "name": "value",
+       "dtype": "float32",
+       "length": 26594,
+       "offset": 0
+      }
+     ]
+    },
+    "V": {
+     "path": "samples/PGSM/V.bin",
+     "sections": [
+      {
+       "name": "value",
+       "dtype": "float32",
+       "length": 26594,
+       "offset": 0
+      }
+     ]
+    },
+    "Np_ratio": {
+     "path": "samples/PGSM/Np_ratio.bin",
+     "sections": [
+      {
+       "name": "value",
+       "dtype": "float32",
+       "length": 26594,
+       "offset": 0
+      }
+     ]
+    },
+    "B_ratio": {
+     "path": "samples/PGSM/B_ratio.bin",
+     "sections": [
+      {
+       "name": "value",
+       "dtype": "float32",
+       "length": 26594,
+       "offset": 0
+      }
+     ]
+    },
+    "Tp_ratio": {
+     "path": "samples/PGSM/Tp_ratio.bin",
+     "sections": [
+      {
+       "name": "value",
+       "dtype": "float32",
+       "length": 26594,
+       "offset": 0
+      }
+     ]
+    },
+    "V_ratio": {
+     "path": "samples/PGSM/V_ratio.bin",
+     "sections": [
+      {
+       "name": "value",
+       "dtype": "float32",
+       "length": 26594,
+       "offset": 0
+      }
+     ]
+    }
+   }
+  }
+ ],
  "voxels": {
   "size_re": 0.25,
   "frames": [
    {
-    "frame": "PGSM_fold",
+    "frame": "GSM",
     "base": {
-     "path": "voxels/PGSM_fold/base.bin",
+     "path": "voxels/GSM/base.bin",
      "sections": [
       {
        "name": "cond_offsets",
        "dtype": "uint32",
-       "length": 361,
+       "length": 721,
        "offset": 0
       },
       {
        "name": "voxel",
        "dtype": "uint32",
-       "length": 811,
-       "offset": 1444
+       "length": 797,
+       "offset": 2884
       }
      ]
     },
     "quantities": {
      "Np": {
-      "path": "voxels/PGSM_fold/Np.bin",
+      "path": "voxels/GSM/Np.bin",
       "sections": [
        {
         "name": "sum",
         "dtype": "float32",
-        "length": 811,
+        "length": 797,
         "offset": 0
        },
        {
         "name": "n",
         "dtype": "uint16",
-        "length": 811,
-        "offset": 3244
+        "length": 797,
+        "offset": 3188
        }
       ]
      },
      "Tp": {
-      "path": "voxels/PGSM_fold/Tp.bin",
+      "path": "voxels/GSM/Tp.bin",
       "sections": [
        {
         "name": "sum",
         "dtype": "float32",
-        "length": 811,
+        "length": 797,
         "offset": 0
        },
        {
         "name": "n",
         "dtype": "uint16",
-        "length": 811,
-        "offset": 3244
+        "length": 797,
+        "offset": 3188
        }
       ]
      },
      "B": {
-      "path": "voxels/PGSM_fold/B.bin",
+      "path": "voxels/GSM/B.bin",
       "sections": [
        {
         "name": "sum",
         "dtype": "float32",
-        "length": 811,
+        "length": 797,
         "offset": 0
        },
        {
         "name": "n",
         "dtype": "uint16",
-        "length": 811,
-        "offset": 3244
+        "length": 797,
+        "offset": 3188
        }
       ]
      },
      "V": {
-      "path": "voxels/PGSM_fold/V.bin",
+      "path": "voxels/GSM/V.bin",
       "sections": [
        {
         "name": "sum",
         "dtype": "float32",
-        "length": 811,
+        "length": 797,
         "offset": 0
        },
        {
         "name": "n",
         "dtype": "uint16",
-        "length": 811,
-        "offset": 3244
+        "length": 797,
+        "offset": 3188
        }
       ]
      },
      "Np_ratio": {
-      "path": "voxels/PGSM_fold/Np_ratio.bin",
+      "path": "voxels/GSM/Np_ratio.bin",
       "sections": [
        {
         "name": "sum",
         "dtype": "float32",
-        "length": 811,
+        "length": 797,
         "offset": 0
        },
        {
         "name": "n",
         "dtype": "uint16",
-        "length": 811,
-        "offset": 3244
+        "length": 797,
+        "offset": 3188
        }
       ]
      },
      "B_ratio": {
-      "path": "voxels/PGSM_fold/B_ratio.bin",
+      "path": "voxels/GSM/B_ratio.bin",
       "sections": [
        {
         "name": "sum",
         "dtype": "float32",
-        "length": 811,
+        "length": 797,
         "offset": 0
        },
        {
         "name": "n",
         "dtype": "uint16",
-        "length": 811,
-        "offset": 3244
+        "length": 797,
+        "offset": 3188
        }
       ]
      },
      "Tp_ratio": {
-      "path": "voxels/PGSM_fold/Tp_ratio.bin",
+      "path": "voxels/GSM/Tp_ratio.bin",
       "sections": [
        {
         "name": "sum",
         "dtype": "float32",
-        "length": 811,
+        "length": 797,
         "offset": 0
        },
        {
         "name": "n",
         "dtype": "uint16",
-        "length": 811,
-        "offset": 3244
+        "length": 797,
+        "offset": 3188
        }
       ]
      },
      "V_ratio": {
-      "path": "voxels/PGSM_fold/V_ratio.bin",
+      "path": "voxels/GSM/V_ratio.bin",
       "sections": [
        {
         "name": "sum",
         "dtype": "float32",
-        "length": 811,
+        "length": 797,
         "offset": 0
        },
        {
         "name": "n",
         "dtype": "uint16",
-        "length": 811,
-        "offset": 3244
+        "length": 797,
+        "offset": 3188
        }
       ]
      },
      "V_vec_x": {
-      "path": "voxels/PGSM_fold/V_vec_x.bin",
+      "path": "voxels/GSM/V_vec_x.bin",
       "sections": [
        {
         "name": "sum",
         "dtype": "float32",
-        "length": 811,
+        "length": 797,
         "offset": 0
        },
        {
         "name": "n",
         "dtype": "uint16",
-        "length": 811,
-        "offset": 3244
+        "length": 797,
+        "offset": 3188
        }
       ]
      },
      "V_vec_y": {
-      "path": "voxels/PGSM_fold/V_vec_y.bin",
+      "path": "voxels/GSM/V_vec_y.bin",
       "sections": [
        {
         "name": "sum",
         "dtype": "float32",
-        "length": 811,
+        "length": 797,
         "offset": 0
        },
        {
         "name": "n",
         "dtype": "uint16",
-        "length": 811,
-        "offset": 3244
+        "length": 797,
+        "offset": 3188
        }
       ]
      },
      "V_vec_z": {
-      "path": "voxels/PGSM_fold/V_vec_z.bin",
+      "path": "voxels/GSM/V_vec_z.bin",
       "sections": [
        {
         "name": "sum",
         "dtype": "float32",
-        "length": 811,
+        "length": 797,
         "offset": 0
        },
        {
         "name": "n",
         "dtype": "uint16",
-        "length": 811,
-        "offset": 3244
+        "length": 797,
+        "offset": 3188
        }
       ]
      },
      "B_vec_x": {
-      "path": "voxels/PGSM_fold/B_vec_x.bin",
+      "path": "voxels/GSM/B_vec_x.bin",
       "sections": [
        {
         "name": "sum",
         "dtype": "float32",
-        "length": 811,
+        "length": 797,
         "offset": 0
        },
        {
         "name": "n",
         "dtype": "uint16",
-        "length": 811,
-        "offset": 3244
+        "length": 797,
+        "offset": 3188
        }
       ]
      },
      "B_vec_y": {
-      "path": "voxels/PGSM_fold/B_vec_y.bin",
+      "path": "voxels/GSM/B_vec_y.bin",
       "sections": [
        {
         "name": "sum",
         "dtype": "float32",
-        "length": 811,
+        "length": 797,
         "offset": 0
        },
        {
         "name": "n",
         "dtype": "uint16",
-        "length": 811,
-        "offset": 3244
+        "length": 797,
+        "offset": 3188
        }
       ]
      },
      "B_vec_z": {
-      "path": "voxels/PGSM_fold/B_vec_z.bin",
+      "path": "voxels/GSM/B_vec_z.bin",
       "sections": [
        {
         "name": "sum",
         "dtype": "float32",
-        "length": 811,
+        "length": 797,
         "offset": 0
        },
        {
         "name": "n",
         "dtype": "uint16",
-        "length": 811,
-        "offset": 3244
+        "length": 797,
+        "offset": 3188
+       }
+      ]
+     }
+    }
+   },
+   {
+    "frame": "PGSM",
+    "base": {
+     "path": "voxels/PGSM/base.bin",
+     "sections": [
+      {
+       "name": "cond_offsets",
+       "dtype": "uint32",
+       "length": 61,
+       "offset": 0
+      },
+      {
+       "name": "voxel",
+       "dtype": "uint32",
+       "length": 1626,
+       "offset": 244
+      }
+     ]
+    },
+    "quantities": {
+     "Np": {
+      "path": "voxels/PGSM/Np.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 1626,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 1626,
+        "offset": 6504
+       }
+      ]
+     },
+     "Tp": {
+      "path": "voxels/PGSM/Tp.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 1626,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 1626,
+        "offset": 6504
+       }
+      ]
+     },
+     "B": {
+      "path": "voxels/PGSM/B.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 1626,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 1626,
+        "offset": 6504
+       }
+      ]
+     },
+     "V": {
+      "path": "voxels/PGSM/V.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 1626,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 1626,
+        "offset": 6504
+       }
+      ]
+     },
+     "Np_ratio": {
+      "path": "voxels/PGSM/Np_ratio.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 1626,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 1626,
+        "offset": 6504
+       }
+      ]
+     },
+     "B_ratio": {
+      "path": "voxels/PGSM/B_ratio.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 1626,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 1626,
+        "offset": 6504
+       }
+      ]
+     },
+     "Tp_ratio": {
+      "path": "voxels/PGSM/Tp_ratio.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 1626,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 1626,
+        "offset": 6504
+       }
+      ]
+     },
+     "V_ratio": {
+      "path": "voxels/PGSM/V_ratio.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 1626,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 1626,
+        "offset": 6504
+       }
+      ]
+     },
+     "V_vec_x": {
+      "path": "voxels/PGSM/V_vec_x.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 1626,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 1626,
+        "offset": 6504
+       }
+      ]
+     },
+     "V_vec_y": {
+      "path": "voxels/PGSM/V_vec_y.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 1626,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 1626,
+        "offset": 6504
+       }
+      ]
+     },
+     "V_vec_z": {
+      "path": "voxels/PGSM/V_vec_z.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 1626,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 1626,
+        "offset": 6504
+       }
+      ]
+     },
+     "B_vec_x": {
+      "path": "voxels/PGSM/B_vec_x.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 1626,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 1626,
+        "offset": 6504
+       }
+      ]
+     },
+     "B_vec_y": {
+      "path": "voxels/PGSM/B_vec_y.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 1626,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 1626,
+        "offset": 6504
+       }
+      ]
+     },
+     "B_vec_z": {
+      "path": "voxels/PGSM/B_vec_z.bin",
+      "sections": [
+       {
+        "name": "sum",
+        "dtype": "float32",
+        "length": 1626,
+        "offset": 0
+       },
+       {
+        "name": "n",
+        "dtype": "uint16",
+        "length": 1626,
+        "offset": 6504
        }
       ]
      }
@@ -676,146 +1587,11 @@
    }
   ]
  },
- "samples": {
-  "cube": "clock-cone-Ma",
-  "fraction": 0.5,
-  "n": 13297,
-  "base": {
-   "path": "samples/base.bin",
-   "sections": [
-    {
-     "name": "cond_offsets",
-     "dtype": "uint32",
-     "length": 361,
-     "offset": 0
-    },
-    {
-     "name": "x",
-     "dtype": "float32",
-     "length": 13297,
-     "offset": 1444
-    },
-    {
-     "name": "y",
-     "dtype": "float32",
-     "length": 13297,
-     "offset": 54632
-    },
-    {
-     "name": "z",
-     "dtype": "float32",
-     "length": 13297,
-     "offset": 107820
-    },
-    {
-     "name": "clock_deg",
-     "dtype": "float32",
-     "length": 13297,
-     "offset": 161008
-    },
-    {
-     "name": "interval",
-     "dtype": "uint32",
-     "length": 13297,
-     "offset": 214196
-    },
-    {
-     "name": "bx_neg",
-     "dtype": "uint8",
-     "length": 13297,
-     "offset": 267384
-    }
-   ]
-  },
-  "quantities": {
-   "Np": {
-    "path": "samples/Np.bin",
-    "sections": [
-     {
-      "name": "value",
-      "dtype": "float32",
-      "length": 13297,
-      "offset": 0
-     }
-    ]
-   },
-   "Tp": {
-    "path": "samples/Tp.bin",
-    "sections": [
-     {
-      "name": "value",
-      "dtype": "float32",
-      "length": 13297,
-      "offset": 0
-     }
-    ]
-   },
-   "B": {
-    "path": "samples/B.bin",
-    "sections": [
-     {
-      "name": "value",
-      "dtype": "float32",
-      "length": 13297,
-      "offset": 0
-     }
-    ]
-   },
-   "V": {
-    "path": "samples/V.bin",
-    "sections": [
-     {
-      "name": "value",
-      "dtype": "float32",
-      "length": 13297,
-      "offset": 0
-     }
-    ]
-   },
-   "Np_ratio": {
-    "path": "samples/Np_ratio.bin",
-    "sections": [
-     {
-      "name": "value",
-      "dtype": "float32",
-      "length": 13297,
-      "offset": 0
-     }
-    ]
-   },
-   "B_ratio": {
-    "path": "samples/B_ratio.bin",
-    "sections": [
-     {
-      "name": "value",
-      "dtype": "float32",
-      "length": 13297,
-      "offset": 0
-     }
-    ]
-   },
-   "Tp_ratio": {
-    "path": "samples/Tp_ratio.bin",
-    "sections": [
-     {
-      "name": "value",
-      "dtype": "float32",
-      "length": 13297,
-      "offset": 0
-     }
-    ]
-   },
-   "V_ratio": {
-    "path": "samples/V_ratio.bin",
-    "sections": [
-     {
-      "name": "value",
-      "dtype": "float32",
-      "length": 13297,
-      "offset": 0
-     }
-    ]
-   }
-  }
+ "js_types": {
+  "uint32": "Uint32Array",
+  "int32": "Int32Array",
+  "uint16": "Uint16Array",
+  "uint8": "Uint8Array",
+  "float32": "Float32Array"
  }
 }

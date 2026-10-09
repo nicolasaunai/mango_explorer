@@ -11,7 +11,7 @@ It has two parts:
 - **`web/`**: a Svelte 5 + TypeScript + three.js app that reads the atlas. It runs no Python in
   the browser.
 
-Both sides follow one binning contract, `src/mango_explorer/spec/grid-v2.json`. Python writes
+Both sides follow one binning contract, `src/mango_explorer/spec/grid-v3.json`. Python writes
 reference values to `golden/`, and the TypeScript tests check against them.
 
 ## Python: build an atlas
@@ -20,12 +20,10 @@ reference values to `golden/`, and the TypeScript tests check against them.
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev]" polars pyarrow hypothesis
 .venv/bin/pytest -q
 
-# from the MANGO server (space-mango >= 0.2, cached and resumable; about 8 min for everything)
+# from the MANGO server (needs space_mango >= 0.3, the frames API; not yet on PyPI, so for now
+# `.venv/bin/pip install -e ../mango`). The atlas is built per frame, GSM and PGSM
+# (`--frames` restricts); cached and resumable
 .venv/bin/python -m mango_explorer.atlas build --mango-api --out atlas/
-# from the server's on-disk parquet
-.venv/bin/python -m mango_explorer.atlas build --parquet-dir $MANGO_DATA_DIR/magnetosheath --out atlas/
-# from Arrow files downloaded with the MANGO API (format=arrow)
-.venv/bin/python -m mango_explorer.atlas build --arrow msh_*.arrow --out atlas/
 # synthetic rows, for development
 .venv/bin/python -m mango_explorer.atlas build --synthetic 400000 --out atlas/
 
@@ -57,10 +55,7 @@ The view state lives in the URL hash, so a link reproduces the view.
 
 ## Conventions
 
-- **Frames.** Every frame rotates about X_GSM.
-  - **PGSM** rotates each sample by its own IMF clock angle, so that the IMF points to +Z.
-  - **PGSM_fold** also flips samples with Bx_imf < 0 (B → −B, then 180° about X), so the
-    quasi-parallel side is always +Z.
+- **Frames.** GSM and PGSM come from space_mango; the explorer shows PGSM at a chosen clock by rotating the data about X (axes fixed).
 - **What is shown is MANGO's normalized data.**
   - Each sample sits at its served `X/Y/Z_gsm_norm` position, rotated into the chosen frame.
   - Depth D_msh is measured geometrically between MANGO's reference surfaces. These are
