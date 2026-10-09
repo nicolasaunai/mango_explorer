@@ -17,7 +17,7 @@ export function voxelCenter(vid: number, g: Grid = defaultGrid): [number, number
 export type VoxelSet = { vid: Uint32Array; n: Float64Array; sum: Float64Array; centers: Float64Array; hash: SpatialHash; total: number };
 
 export class VoxelFrame {
-  private q = new Map<string, Record<string, Typed>>();
+  private q = new Map<string, Promise<Record<string, Typed>>>();
   private constructor(readonly manifest: Manifest, readonly frame: string, readonly base: Record<string, Typed>,
     private entry: NonNullable<Manifest['voxels']>['frames'][number], private fetchBytes: FetchBytes) {}
 
@@ -27,57 +27,54 @@ export class VoxelFrame {
     return new VoxelFrame(manifest, frame, await loadSections(fetchBytes, entry.base) as Record<string, Typed>, entry, fetchBytes);
   }
 
-  async quantity(name: QuantityName) {
-    if (!this.q.has(name)) this.q.set(name, await loadSections(this.fetchBytes, this.entry.quantities[name]) as Record<string, Typed>);
+  /** One quantity's (or vector component's) per-row count and sum, loaded once. */
+  async quantity(name: QuantityName | `${VectorName}_${'x' | 'y' | 'z'}`) {
+    const file = this.entry.quantities[name];
+    if (!file) throw new Error(`this atlas has no ${name} voxel sums (rebuild it)`);
+    if (!this.q.has(name)) {
+      const load = loadSections(this.fetchBytes, file) as Promise<Record<string, Typed>>;
+      this.q.set(name, load);
+      load.catch(() => this.q.delete(name));  // a failed fetch is retried next time
+    }
     return this.q.get(name)!;
+  }
+
+  /** Sum the selected condition bins into one entry per voxel: counts `n`, and each of `sums`. */
+  private sumSelected(sel: Selection, n: Typed, sums: Typed[], cell: number, g: Grid) {
+    const cube = this.manifest.cubes[0];
+    const conds = selectedConditions(cube.dims, cube.shape, sel);
+    const off = this.base.cond_offsets, vox = this.base.voxel, m = sums.length;
+    const index = new Map<number, number>();
+    const vids: number[] = [], ns: number[] = [], ss: number[][] = sums.map(() => []);
+    for (const c of conds)
+      for (let r = off[c]; r < off[c + 1]; r++) {
+        if (n[r] === 0) continue;
+        const v = vox[r];
+        let i = index.get(v);
+        if (i === undefined) { i = vids.length; index.set(v, i); vids.push(v); ns.push(0); for (const s of ss) s.push(0); }
+        ns[i] += n[r];
+        for (let k = 0; k < m; k++) ss[k][i] += sums[k][r];
+      }
+    const centers = new Float64Array(vids.length * 3);
+    vids.forEach((v, i) => centers.set(voxelCenter(v, g), 3 * i));
+    return { vid: Uint32Array.from(vids), n: Float64Array.from(ns), sums: ss.map((s) => Float64Array.from(s)), centers,
+      hash: new SpatialHash(centers, cell), total: ns.reduce((a, b) => a + b, 0) };
   }
 
   /** Sum the selected condition bins into one entry per voxel. */
   async select(name: QuantityName, sel: Selection, cell: number, g: Grid = defaultGrid): Promise<VoxelSet> {
-    const cube = this.manifest.cubes[0];
-    const conds = selectedConditions(cube.dims, cube.shape, sel);
-    const { n: qn, sum: qs } = await this.quantity(name);
-    const off = this.base.cond_offsets, vox = this.base.voxel;
-    const index = new Map<number, number>();
-    const vids: number[] = [], ns: number[] = [], ss: number[] = [];
-    for (const c of conds)
-      for (let r = off[c]; r < off[c + 1]; r++) {
-        if (qn[r] === 0) continue;
-        const v = vox[r];
-        let i = index.get(v);
-        if (i === undefined) { i = vids.length; index.set(v, i); vids.push(v); ns.push(0); ss.push(0); }
-        ns[i] += qn[r]; ss[i] += qs[r];
-      }
-    const centers = new Float64Array(vids.length * 3);
-    vids.forEach((v, i) => centers.set(voxelCenter(v, g), 3 * i));
-    return { vid: Uint32Array.from(vids), n: Float64Array.from(ns), sum: Float64Array.from(ss), centers,
-      hash: new SpatialHash(centers, cell), total: ns.reduce((a, b) => a + b, 0) };
+    const { n, sum } = await this.quantity(name);
+    const { sums, ...rest } = this.sumSelected(sel, n, [sum], cell, g);
+    return { ...rest, sum: sums[0] };
   }
 
   /** Sum the selected condition bins of a vector's three component sums (counts are shared). */
   async selectVector(name: VectorName, sel: Selection, cell: number, g: Grid = defaultGrid): Promise<VectorVoxelSet> {
-    const files = (['x', 'y', 'z'] as const).map((c) => this.entry.quantities[`${name}_${c}`]);
-    if (files.some((f) => !f)) throw new Error(`this atlas has no ${name} voxel sums (rebuild it)`);
-    const comps = await Promise.all(files.map((f) => loadSections(this.fetchBytes, f) as Promise<Record<string, Typed>>));
-    const cube = this.manifest.cubes[0];
-    const conds = selectedConditions(cube.dims, cube.shape, sel);
-    const off = this.base.cond_offsets, vox = this.base.voxel, qn = comps[0].n;
-    const index = new Map<number, number>();
-    const vids: number[] = [], ns: number[] = [], ss: [number[], number[], number[]] = [[], [], []];
-    for (const c of conds)
-      for (let r = off[c]; r < off[c + 1]; r++) {
-        if (qn[r] === 0) continue;
-        const v = vox[r];
-        let i = index.get(v);
-        if (i === undefined) { i = vids.length; index.set(v, i); vids.push(v); ns.push(0); ss.forEach((s) => s.push(0)); }
-        ns[i] += qn[r];
-        for (let k = 0; k < 3; k++) ss[k][i] += comps[k].sum[r];
-      }
-    const centers = new Float64Array(vids.length * 3);
-    vids.forEach((v, i) => centers.set(voxelCenter(v, g), 3 * i));
-    return { vid: Uint32Array.from(vids), n: Float64Array.from(ns),
-      sums: [Float64Array.from(ss[0]), Float64Array.from(ss[1]), Float64Array.from(ss[2])], centers,
-      hash: new SpatialHash(centers, cell), total: ns.reduce((a, b) => a + b, 0) };
+    const names = (['x', 'y', 'z'] as const).map((c) => `${name}_${c}` as const);
+    if (names.some((c) => !this.entry.quantities[c])) throw new Error(`this atlas has no ${name} voxel sums (rebuild it)`);
+    const comps = await Promise.all(names.map((c) => this.quantity(c)));
+    const { sums, ...rest } = this.sumSelected(sel, comps[0].n, comps.map((c) => c.sum), cell, g);
+    return { ...rest, sums: [sums[0], sums[1], sums[2]] };
   }
 }
 
