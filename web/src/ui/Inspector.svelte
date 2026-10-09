@@ -5,6 +5,8 @@
   import { FLAG, formatValue } from '../core/compute';
   import { cellBounds } from '../core/geometry';
   import { grid } from '../core/grid';
+  import { mod } from '../core/frames';
+  import { rotationOf } from '../state/imf';
   import { richText } from './format';
 
   const knn = $derived(app.source === 'knn');
@@ -21,6 +23,8 @@
   const aMedian = $derived(app.pinA && stats.resultA && app.probe >= 0 && (app.stat === 'median')
     ? stats.resultA.values[app.probe] : NaN);
   const b = $derived(app.probe >= 0 ? cellBounds(app.probe) : null);
+  // the cell's azimuth as displayed: atlas (clock 0) azimuth minus the PGSM rotation
+  const phiShown = $derived(b ? b.phi.map((v) => mod(v - rotationOf(app), 360)) : [0, 0]);
   const log = $derived(grid.isLog(app.quantity));
   const phys = (v: number) => (log ? 10 ** v : v);
   const flag = $derived(stats.result && app.probe >= 0 ? stats.result.flags[app.probe] : null);
@@ -37,7 +41,7 @@
       <span class="eyebrow">Probe</span>
       <button type="button" class="x" aria-label="Close probe" onclick={() => patch({ probe: -1 })}>×</button>
     </header>
-    <div class="where mono">D {b.d[0].toFixed(1)}–{b.d[1].toFixed(1)} · θ {b.theta[0]}–{b.theta[1]}° · φ {b.phi[0]}–{b.phi[1]}°</div>
+    <div class="where mono">D {b.d[0].toFixed(1)}–{b.d[1].toFixed(1)} · θ {b.theta[0]}–{b.theta[1]}° · φ {phiShown[0]}–{phiShown[1]}°</div>
     {#if knn && kp}
       <div class="mono muted">{#if kp.voxels !== undefined}{kp.result.n.toLocaleString('en-US')} nearest samples (full data, {kp.voxels} voxels){:else}{kp.result.n} of {kp.kSearched} searched (k = {kp.k.toLocaleString('en-US')} full data){/if} · median distance {Number.isFinite(kp.result.distMedian) ? kp.result.distMedian.toFixed(2) : '—'} R<sub>E</sub> (cap {app.cap})</div>
     {/if}

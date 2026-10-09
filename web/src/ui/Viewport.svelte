@@ -121,7 +121,7 @@
     {#if stats.pending}<span class="tag muted">updating…</span>{/if}
     {#if stats.error}<span class="tag warn">{stats.error}</span>{/if}
     {#if linesUpdating}<span class="tag muted">lines updating…</span>{/if}
-    {#if linesOn}<span class="tag muted">lines: k-NN 1/d mean, k = {app.k}, cap {app.cap} R<sub>E</sub> · vectors mapped to normalized space</span>{/if}
+    {#if linesOn}<span class="tag muted">lines: k-NN 1/d mean, k = {app.k}, cap {app.cap} R<sub>E</sub> · vectors mapped to normalized space{#if app.frame === 'PGSM'} · PGSM: approximation A2 (vector mapping treats the SWI rotation as about X<sub>GSM</sub>; aberration, median 5.4°){/if}</span>{/if}
     {#if fieldOn && mixesPolarity(app.frame, app.clock, app.cone)}<span class="tag warn">field lines average opposite IMF orientations</span>{/if}
     {#if linesOn && stats.linesError}<span class="tag warn">lines: {stats.linesError}</span>{/if}
     <Inspector />

@@ -24,7 +24,7 @@
   <svg bind:this={svg} viewBox="-118 -118 236 236" role="slider" tabindex="0" aria-label="IMF clock angle, seen from the Sun"
     aria-valuemin="0" aria-valuemax="359" aria-valuenow={value} onkeydown={key}
     onpointerdown={(e) => { dragging = true; svg.setPointerCapture(e.pointerId); at(e); }}
-    onpointermove={(e) => dragging && at(e)} onpointerup={() => (dragging = false)}>
+    onpointermove={(e) => dragging && at(e)} onpointerup={() => (dragging = false)} onpointercancel={() => (dragging = false)}>
     <circle r={R} class="ring" />
     {#each [0, 90, 180, 270] as a (a)}
       <line class="tick" x1={0} y1={-R} x2={0} y2={-R + 8} transform={`rotate(${a})`} />

@@ -175,3 +175,23 @@ def test_pack_can_thin_the_sample_tables(tmp_path, rows):
         assert 0.12 < len(b["x"]) / len(a["x"]) < 0.28
         assert b["cond_offsets"][-1] == len(b["x"])
         assert np.isin(b["x"], a["x"]).all()
+
+
+def test_read_atlas_rejects_other_formats(tmp_path, rows):
+    import json
+    _build(rows, tmp_path)
+    path = tmp_path / "manifest.json"
+    m = json.loads(path.read_text())
+    path.write_text(json.dumps({**m, "format": "mango-atlas/1"}))
+    with pytest.raises(ValueError, match="rebuild it"):
+        read_atlas(tmp_path)
+    path.write_text(json.dumps({**m, "grid": "grid-v2"}))
+    with pytest.raises(ValueError, match="grid-v2"):
+        read_atlas(tmp_path)
+
+
+def test_cell_statistics_ignores_selection_keys_of_other_frames(rows):
+    from mango_explorer.atlas.query import cell_statistics
+    a = cell_statistics(rows["PGSM"], "PGSM", "Np_ratio", {"clock_deg": [1], "cone_deg": [2, 3]})
+    b = cell_statistics(rows["PGSM"], "PGSM", "Np_ratio", {"cone_deg": [2, 3]})
+    assert a.height > 0 and a.equals(b)

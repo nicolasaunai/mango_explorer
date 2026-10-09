@@ -60,7 +60,8 @@ export class SceneView {
   readonly slices: Record<Plane, SliceLayer> = { XY: new SliceLayer(), XZ: new SliceLayer(), YZ: new SliceLayer() };
   private marker = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 12), new THREE.MeshBasicMaterial({ color: PALETTE.fg }));
   private raycaster = new THREE.Raycaster();
-  /** Called with the physics position (X, Y, Z) of a click on a slice or on the depth shell. */
+  /** Called with the displayed position (X, Y, Z) of a click on a slice or on the depth shell
+   * (PGSM: rotated by the target clock; callers un-rotate). */
   onPick: ((p: [number, number, number], onShell: boolean) => void) | null = null;
   /** Called while a slice is dragged along its normal (done = false) and on release (done = true). */
   onPlaneDrag: ((plane: Plane, offset: number, done: boolean) => void) | null = null;

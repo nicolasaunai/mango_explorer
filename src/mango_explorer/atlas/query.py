@@ -29,7 +29,8 @@ def cell_statistics(df, frame: str, quantity: str, selection: dict | None = None
     import polars as pl
 
     g = grid or load_grid()
-    selection = selection or {}
+    # keys that are not conditions of this frame (e.g. clock_deg in PGSM) are ignored
+    selection = {k: v for k, v in (selection or {}).items() if k in g.frame_conditions(frame)}
     if hasattr(df, "to_polars"):
         df = df.to_polars()
     c = canonical_columns(df, frame)

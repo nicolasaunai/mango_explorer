@@ -58,6 +58,14 @@ describe('atlas reader', () => {
     const buf = await readFile(root + p);
     return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
   };
+  it('rejects an atlas of another format or grid', async () => {
+    const bad = (patch: object): FetchBytes => async (p) => {
+      const m = { ...JSON.parse(new TextDecoder().decode(await fetchBytes(p))), ...patch };
+      return new TextEncoder().encode(JSON.stringify(m)).buffer as ArrayBuffer;
+    };
+    await expect(loadManifest(bad({ format: 'mango-atlas/1' }))).rejects.toThrow(/mango-atlas\/1.*rebuild it/);
+    await expect(loadManifest(bad({ grid: 'grid-v2' }))).rejects.toThrow(/grid-v2/);
+  });
   it('reproduces the Python query', async () => {
     const ref = golden.atlas_mini;
     const manifest = await loadManifest(fetchBytes);

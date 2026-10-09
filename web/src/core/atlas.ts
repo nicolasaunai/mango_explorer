@@ -152,7 +152,10 @@ export class SampleTable {
 
 export async function loadManifest(fetchBytes: FetchBytes): Promise<Manifest> {
   const text = new TextDecoder().decode(await fetchBytes('manifest.json'));
-  return JSON.parse(text) as Manifest;
+  const manifest = JSON.parse(text) as Manifest;
+  if (manifest.format !== 'mango-atlas/2' || manifest.grid !== defaultGrid.raw.version)
+    throw new Error(`this atlas is ${manifest.format}/${manifest.grid}; the explorer needs mango-atlas/2 built on ${defaultGrid.raw.version}: rebuild it`);
+  return manifest;
 }
 
 /** Gunzip bytes that start with the gzip magic number; return anything else unchanged

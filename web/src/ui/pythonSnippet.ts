@@ -29,6 +29,7 @@ export function pythonSnippet(s: ViewState): string {
   ];
   const sel = dims.filter(([n, b]) => !full(n, b)).map(([n, b]) => `"${n}": [${b.join(', ')}]`);
   const args: string[] = [`frame="${pgsm ? 'pgsm' : 'gsm'}"`];
+  if (!pgsm) args.push('sw_paired_only=True', 'normalized_only=True');
   const [c0, c1] = hull('cone_deg', s.cone);
   if (pgsm || !full('cone_deg', s.cone)) args.push(`cone=[${c0}, ${c1}]`);
   if (pgsm) args.push(`clock=${s.clockDeg}`);
@@ -45,6 +46,7 @@ export function pythonSnippet(s: ViewState): string {
     'from mango_explorer.atlas import FRAME_COLUMNS, cell_statistics',
     '',
     `result = sm.get_data("magnetosheath", ${args.join(', ')})`,
+    ...(pgsm ? ["# cells match the explorer's when the clock is a multiple of 15 deg (the explorer bins at clock 0, then rotates the view)"] : []),
     `cells = cell_statistics(result, frame="${s.frame}", quantity="${s.quantity}",`,
     `                        selection={${sel.join(', ')}})`,
     `print(cells.filter(pl.col("reliable")).sort("${stat}"))`,

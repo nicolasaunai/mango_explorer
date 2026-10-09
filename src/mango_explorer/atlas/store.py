@@ -241,6 +241,10 @@ def _thin_samples(src: Path, entry: dict, fraction: float) -> dict:
 def read_atlas(root: Path):
     root = Path(root)
     manifest = json.loads((root / "manifest.json").read_text())
+    current = load_grid().version
+    if manifest.get("format") != "mango-atlas/2" or manifest.get("grid") != current:
+        raise ValueError(f"this atlas is {manifest.get('format')}/{manifest.get('grid')}; "
+                         f"the explorer needs mango-atlas/2 built on {current}: rebuild it")
     grid = load_grid(manifest["grid"])
     cubes = [read_cube(root, e, grid) for e in manifest["cubes"]]
     hours = {h["frame"]: _read_sections(root / h["path"], h["sections"]) for h in manifest["hours"]}
