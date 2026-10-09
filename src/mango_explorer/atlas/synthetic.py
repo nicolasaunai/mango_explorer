@@ -82,3 +82,61 @@ def synthetic_magnetosheath(n_rows: int = 100_000, seed: int = 0,
         "R_norm": d, "R_mp": a_mp * r_mp, "R_bs": a_bs * r_bs, "Norma_pos": np.ones(n, dtype=bool), "SW_pairing": np.ones(n, dtype=bool),
         "X_gsm_norm": x, "Y_gsm_norm": y, "Z_gsm_norm": z,
     })
+
+
+def synthetic_frame(df, frame: str):
+    """What space_mango returns for `frame` (the atlas columns), from synthetic_magnetosheath rows.
+
+    GSM: the paired, normalized rows. PGSM at clock 0 with cone=[0, 180]: a caricature of MANGO's
+    transform that holds when V_sw is along -X (synthetic V_sw is within a few degrees of it). Each row
+    appears twice. bx_sign = +1: the row turned about X so that the IMF lies in the X-Z plane with
+    Bx > 0 and Bz > 0 (B -> -B when Bx_imf < 0, as SWI does), cone f = arccos(|Bx_imf|/|B_imf|).
+    bx_sign = -1: its mirror Z -> -Z (positions, V), B -> (-Bx, -By, Bz), cone 180 - f.
+    """
+    import polars as pl
+
+    from mango_explorer.atlas.columns import (
+        FRAME_COLUMNS,
+        GSM_COLUMNS,
+        PGSM_B_IMF,
+        PGSM_CONE,
+        PGSM_V_SW,
+    )
+
+    d = df.filter(pl.col("SW_pairing") & pl.col("Norma_pos"))
+    if frame == "GSM":
+        return d.select(GSM_COLUMNS)
+    if frame != "PGSM":
+        raise ValueError(f"unknown frame {frame!r}")
+    c = {k: d[k].to_numpy() for k in d.columns}
+    bx, by, bz = c["Bx_imf"], c["By_imf"], c["Bz_imf"]
+    b_imf = np.sqrt(bx**2 + by**2 + bz**2)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        f = np.degrees(np.arccos(np.clip(np.abs(bx) / b_imf, 0.0, 1.0)))
+    keep = np.isfinite(f)
+    c = {k: v[keep] for k, v in c.items()}
+    bx, by, bz, b_imf, f = bx[keep], by[keep], bz[keep], b_imf[keep], f[keep]
+    neg = bx < 0
+    angle = np.arctan2(by, bz) + np.pi * neg          # azimuth atan2(z, y) increases by `angle`
+    ca, sa = np.cos(angle), np.sin(angle)
+    rot = lambda y, z: (y * ca - z * sa, y * sa + z * ca)
+    y, z = rot(c["Y_gsm_norm"], c["Z_gsm_norm"])
+    vy, vz = rot(c["Vy"], c["Vz"])
+    sgn = np.where(neg, -1.0, 1.0)
+    b_y, b_z = rot(c["By"], c["Bz"])
+    b = (sgn * c["Bx"], sgn * b_y, sgn * b_z)
+    scalars = {k: c[k] for k in FRAME_COLUMNS["PGSM"][:12]}  # Time ... R_bs
+    scalars[PGSM_V_SW] = np.sqrt(c["Vx_sw"] ** 2 + c["Vy_sw"] ** 2 + c["Vz_sw"] ** 2)
+    scalars[PGSM_B_IMF] = b_imf
+
+    def copy(s: int):
+        m = float(s)
+        return pl.DataFrame({
+            **scalars, PGSM_CONE: f if s > 0 else 180.0 - f,
+            "X_pgsm_norm": c["X_gsm_norm"], "Y_pgsm_norm": y, "Z_pgsm_norm": m * z,
+            "Bx_pgsm": m * b[0], "By_pgsm": m * b[1], "Bz_pgsm": b[2],
+            "Vx_pgsm": c["Vx"], "Vy_pgsm": vy, "Vz_pgsm": m * vz,
+            "bx_sign": np.full(len(f), s, dtype=np.int8), "mirrored": np.where(neg, 1, -1) == s,
+        })
+
+    return pl.concat([copy(1), copy(-1)]).sort("Time", maintain_order=True)
