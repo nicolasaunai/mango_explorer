@@ -1,6 +1,7 @@
 // Everything a view depends on, serialized in the URL hash so a link reproduces the view.
 import { z } from 'zod';
 import { grid, type QuantityName } from '../core/grid';
+import { mod } from '../core/frames';
 import { LUT_NAMES, type LutName } from '../render/lut';
 
 const bins = (n: number) => z.array(z.number().int().min(0).max(n - 1)).min(1);
@@ -17,11 +18,14 @@ export const STATS_FOR = {
   knn: ['wmean', 'mean', 'median', 'q25', 'q75'],
 } as const;
 export const PLANES = ['XY', 'XZ', 'YZ'] as const;
-export const LAYERS = ['mp', 'bs', 'tint', 'shells', 'slice', 'zgsm', 'flow', 'field'] as const;
+export const LAYERS = ['mp', 'bs', 'tint', 'shells', 'slice', 'flow', 'field'] as const;
 
 export const ViewState = z.object({
-  frame: z.enum(['GSM', 'PGSM', 'PGSM_fold']),
+  frame: z.enum(['GSM', 'PGSM']),
+  /** GSM: IMF clock sectors that filter the data */
   clock: bins(N_CLOCK),
+  /** PGSM: the one target IMF clock angle, degrees in [0, 360) */
+  clockDeg: z.number().int().min(0).max(359),
   cone: bins(N_CONE),
   ma: bins(N_MA),
   quantity: z.enum(grid.quantityNames as [QuantityName, ...QuantityName[]]),
@@ -47,10 +51,11 @@ export const ViewState = z.object({
 });
 export type ViewState = z.infer<typeof ViewState>;
 
-/** Landing view chosen by the physics panel: Parker-spiral IMF, folded PGSM, density compression. */
+/** Landing view chosen by the physics panel: Parker-spiral IMF, PGSM, density compression. */
 export const DEFAULT_STATE: ViewState = {
-  frame: 'PGSM_fold',
+  frame: 'PGSM',
   clock: range(N_CLOCK),
+  clockDeg: 0,
   cone: [2, 3],
   ma: [2, 3],
   quantity: 'Np_ratio',
@@ -74,11 +79,17 @@ export const DEFAULT_STATE: ViewState = {
 
 export const PRESETS: { id: string; label: string; hint: string; state: Partial<ViewState> }[] = [
   { id: 'parker', label: 'Parker spiral', hint: 'cone 30–60°, M_A 6–12', state: { clock: range(N_CLOCK), cone: [2, 3], ma: [2, 3] } },
-  { id: 'north', label: 'Northward', hint: 'clock 330–30°, cone ≥ 60°, M_A < 8', state: { clock: [11, 0], cone: [4, 5], ma: [0, 1, 2] } },
-  { id: 'south', label: 'Southward', hint: 'clock 150–210°, cone ≥ 45°', state: { clock: [5, 6], cone: [3, 4, 5], ma: range(N_MA) } },
-  { id: 'radial', label: 'Radial IMF', hint: 'cone < 30°', state: { clock: range(N_CLOCK), cone: [0, 1], ma: range(N_MA) } },
+  { id: 'north', label: 'Northward', hint: 'clock 0° (GSM: 330–30°), cone 60–120°, M_A < 8', state: { clock: [11, 0], clockDeg: 0, cone: [4, 5, 6, 7], ma: [0, 1, 2] } },
+  { id: 'south', label: 'Southward', hint: 'clock 180° (GSM: 150–210°), cone 45–135°', state: { clock: [5, 6], clockDeg: 180, cone: [3, 4, 5, 6, 7, 8], ma: range(N_MA) } },
+  { id: 'radial', label: 'Radial IMF', hint: 'cone < 30° or > 150°', state: { clock: range(N_CLOCK), cone: [0, 1, 10, 11], ma: range(N_MA) } },
   { id: 'lowmach', label: 'Low Mach', hint: 'M_A < 4', state: { clock: range(N_CLOCK), cone: range(N_CONE), ma: [0] } },
 ];
+
+/** A typed clock angle as a whole degree in [0, 360), or undefined when it is not a number. */
+const wrapClock = (s: string | null) => {
+  const x = s === null ? NaN : Number(s);
+  return Number.isFinite(x) ? mod(Math.round(x), 360) : undefined;
+};
 
 /** Old links stored the shell as a depth bin index. */
 const binCentre = (i: number) => (Number.isInteger(i) && i >= 0 && i < grid.dEdges.length - 1 ? (grid.dEdges[i] + grid.dEdges[i + 1]) / 2 : undefined);
@@ -88,7 +99,7 @@ const unlist = (s: string | null) => (s ? s.split('.').filter(Boolean).map(Numbe
 
 export function encodeHash(s: ViewState): string {
   const p = new URLSearchParams({
-    f: s.frame, clk: list(s.clock), cone: list(s.cone), ma: list(s.ma),
+    f: s.frame, clk: list(s.clock), ck: String(s.clockDeg), cone: list(s.cone), ma: list(s.ma),
     q: s.quantity, st: s.stat, pl: s.planes.join('.'), v: s.view, ly: s.layers.join('.'),
     cm: s.lut, d: String(+s.depth.toFixed(3)),
   });
@@ -106,10 +117,11 @@ export function encodeHash(s: ViewState): string {
 export function decodeHash(hash: string): ViewState {
   const p = new URLSearchParams(hash.replace(/^#/, ''));
   const candidate = {
-    frame: p.get('f') ?? undefined, clock: unlist(p.get('clk')), cone: unlist(p.get('cone')),
+    frame: ((f) => (f === 'PGSM_fold' ? 'PGSM' : f))(p.get('f')) ?? undefined,
+    clock: unlist(p.get('clk')), clockDeg: wrapClock(p.get('ck')), cone: unlist(p.get('cone')),
     ma: unlist(p.get('ma')), quantity: p.get('q') ?? undefined, stat: p.get('st') ?? undefined,
     planes: p.has('pl') ? (p.get('pl') || '').split('.').filter(Boolean) : undefined, view: p.get('v') ?? undefined,
-    layers: p.has('ly') ? (p.get('ly') || '').split('.').filter(Boolean) : undefined,
+    layers: p.has('ly') ? (p.get('ly') || '').split('.').filter((l) => (LAYERS as readonly string[]).includes(l)) : undefined,
     lut: p.get('cm') ?? undefined,
     depth: p.has('d') ? Number(p.get('d')) : p.has('sh') ? binCentre(Number(p.get('sh'))) : undefined,
     probe: p.has('pr') ? Number(p.get('pr')) : undefined,
@@ -130,18 +142,4 @@ export function decodeHash(hash: string): ViewState {
     if (r.success) out[k] = r.data;
   }
   return out as ViewState;
-}
-
-/** True when every selected cone bin is below 30°, where the clock angle is ill-defined. */
-export const clockUndefined = (cone: number[]) => cone.every((b) => grid.conditionEdges('cone_deg')[b + 1] <= 30);
-
-/** Field lines average opposite IMF orientations: PGSM without the fold (mixed Bx), or GSM when the selected
- * clock sectors span more than 90 deg. */
-export function mixesPolarity(frame: ViewState['frame'], clock: number[]): boolean {
-  if (frame === 'PGSM_fold') return false;
-  if (frame === 'PGSM') return true;
-  const sel = [...new Set(clock)].sort((a, b) => a - b);
-  let gap = 0;  // largest run of unselected sectors, circularly
-  sel.forEach((s, i) => { gap = Math.max(gap, (sel[(i + 1) % sel.length] - s - 1 + N_CLOCK) % N_CLOCK); });
-  return (N_CLOCK - gap) * (360 / N_CLOCK) > 90;
 }
