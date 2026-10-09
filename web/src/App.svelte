@@ -53,9 +53,6 @@
   });
 
   let tab = $state<'cond' | 'qty' | 'views'>('cond');
-  const pgsm = $derived(app.frame !== 'GSM');
-  const setFrame = (f: 'GSM' | 'PGSM') => patch({ frame: f === 'GSM' ? 'GSM' : 'PGSM_fold' });
-  const toggleFold = () => patch({ frame: app.frame === 'PGSM_fold' ? 'PGSM' : 'PGSM_fold' });
 </script>
 
 <div class="shell">
@@ -63,12 +60,11 @@
     <div class="brand"><span class="name">MANGO</span><span class="sub">magnetosheath explorer</span></div>
     <div class="frame" role="group" aria-label="Coordinate frame">
       <div class="seg">
-        <button type="button" aria-pressed={!pgsm} onclick={() => setFrame('GSM')} title="Geocentric solar magnetospheric">GSM</button>
-        <button type="button" aria-pressed={pgsm} onclick={() => setFrame('PGSM')} title="GSM rotated about X so the IMF points to +Z">PGSM</button>
+        <button type="button" aria-pressed={app.frame === 'GSM'} onclick={() => patch({ frame: 'GSM' })}
+          title="GSM: data as measured; the clock angle filters the data">GSM</button>
+        <button type="button" aria-pressed={app.frame === 'PGSM'} onclick={() => patch({ frame: 'PGSM' })}
+          title="MANGO pseudo-GSM (Michotte de Welle 2024): every IMF orientation brought to one clock angle by symmetry">PGSM</button>
       </div>
-      <label class="fold" class:off={!pgsm} title="Samples with Bx < 0 are flipped (B → −B) and turned 180° about X, so the quasi-parallel side is always +Z">
-        <input type="checkbox" checked={app.frame === 'PGSM_fold'} disabled={!pgsm} onchange={toggleFold} /> fold IMF polarity
-      </label>
     </div>
     <div class="status mono">
       {#if data.status === 'ready' && data.manifest?.source?.kind === 'synthetic'}<span class="synthetic">synthetic data · not MANGO</span>
@@ -114,9 +110,6 @@
   .name { font: 800 20px/1 var(--f-display); font-stretch: 75%; letter-spacing: 0.04em; }
   .sub { font: 12px var(--f-mono); color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
   .frame { display: flex; align-items: center; gap: 12px; }
-  .fold { display: flex; align-items: center; gap: 6px; font-size: 12.5px; cursor: pointer; }
-  .fold.off { opacity: 0.45; }
-  .fold input { accent-color: var(--mp); }
   .status { font-size: 11px; color: var(--muted); }
   .synthetic { color: var(--approx); border: 1px solid var(--approx); border-radius: 3px; padding: 2px 6px; text-transform: uppercase; letter-spacing: 0.06em; }
   .left, .right { overflow-y: auto; padding: 16px; background: var(--panel); }

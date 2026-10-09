@@ -28,7 +28,7 @@ const binText = (name: 'clock_deg' | 'cone_deg' | 'Ma_sw', bins: number[]) => {
 };
 
 /** One-line summary of the conditions, for exports and captions. */
-export function conditionSummary(s: { frame: string; clock: number[]; cone: number[]; ma: number[] }) {
-  const frame = s.frame === 'PGSM_fold' ? 'PGSM, IMF polarity folded' : s.frame;
-  return `${frame} · clock ${binText('clock_deg', s.clock)}° · cone ${binText('cone_deg', s.cone)}° · M_A ${binText('Ma_sw', s.ma)}`;
+export function conditionSummary(s: { frame: string; clock: number[]; clockDeg: number; cone: number[]; ma: number[] }) {
+  const clock = s.frame === 'PGSM' ? `${s.clockDeg}` : binText('clock_deg', s.clock);
+  return `${s.frame} · clock ${clock}° · cone ${binText('cone_deg', s.cone)}° · M_A ${binText('Ma_sw', s.ma)}`;
 }

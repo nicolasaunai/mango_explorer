@@ -93,7 +93,7 @@
     tmp.innerHTML = quantityTitle(app.quantity, app.stat);
     exportPng(view, {
       title: (d.mode === 'diff' ? 'B / A: ' : d.mode === 'A' ? 'A: ' : '') + (tmp.textContent ?? ''),
-      conditions: (d.mode === 'B' || !app.pinA ? '' : `A: ${conditionSummary({ ...app.pinA, frame: app.frame })}  |  B: `) + conditionSummary(app),
+      conditions: (d.mode === 'B' || !app.pinA ? '' : `A: ${conditionSummary({ ...app.pinA, frame: app.frame, clockDeg: app.clockDeg })}  |  B: `) + conditionSummary(app),
       counts: totals ? `N_eff ${fmt.format(totals.neff)} spacecraft-hours · N ${fmt.format(totals.n)} samples` : '',
       provenance: `MANGO atlas ${data.manifest?.grid ?? ''} (${data.manifest?.source?.kind ?? ''}) · ${data.manifest?.created ?? ''} · ${BOUNDARY_NOTE}`,
       lut: d.lut, range: d.range, log: d.log,

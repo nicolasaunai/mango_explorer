@@ -1,9 +1,11 @@
 <script lang="ts">
   import ClockDial from './ClockDial.svelte';
+  import ClockNeedle from './ClockNeedle.svelte';
   import BinBar from './BinBar.svelte';
   import { app, patch } from '../state/app.svelte';
   import { data, selectionOf } from '../state/data.svelte';
-  import { PRESETS, clockUndefined } from '../state/schema';
+  import { PRESETS } from '../state/schema';
+  import { clockUndefined } from '../state/imf';
   import { conditionSummary } from './format';
   import { grid, type ConditionName } from '../core/grid';
 
@@ -14,9 +16,10 @@
   const coneLabels = labelsOf('cone_deg');
   const maLabels = labelsOf('Ma_sw');
 
-  const sel = $derived(selectionOf(app));
-  const totals = $derived(data.hours?.counts(sel) ?? null);
-  const marg = (dim: ConditionName) => data.hours?.marginal(dim, sel).map((c) => c.neff) ?? null;
+  const hours = $derived(data.hours[app.frame] ?? null);
+  const sel = $derived(selectionOf(app.frame, app));
+  const totals = $derived(hours?.counts(sel) ?? null);
+  const marg = (dim: ConditionName) => hours?.marginal(dim, sel).map((c) => c.neff) ?? null;
   const clockAvail = $derived(marg('clock_deg'));
   const coneAvail = $derived(marg('cone_deg'));
   const maAvail = $derived(marg('Ma_sw'));
@@ -35,14 +38,20 @@
   </div>
 
   <div class="ctl">
-    <div class="row"><span class="eyebrow">IMF clock angle</span>
-      <span class="mono muted">{radial ? 'undefined' : app.clock.length === 12 ? 'all' : `${app.clock.length} × 30°`}</span></div>
-    <ClockDial selected={app.clock} availability={clockAvail} disabled={radial} onchange={(clock) => patch({ clock })} />
-    {#if radial}<p class="note">The clock angle is undefined for radial IMF (cone &lt; 30°), so it is not applied.</p>{/if}
+    {#if app.frame === 'PGSM'}
+      <div class="row"><span class="eyebrow">IMF clock angle</span><span class="mono muted">{app.clockDeg}°</span></div>
+      <ClockNeedle value={app.clockDeg} onchange={(clockDeg) => patch({ clockDeg })} />
+      <p class="note">PGSM: every sample is rotated to this clock angle by symmetry; it does not filter the data.</p>
+    {:else}
+      <div class="row"><span class="eyebrow">IMF clock angle</span>
+        <span class="mono muted">{radial ? 'undefined' : app.clock.length === 12 ? 'all' : `${app.clock.length} × 30°`}</span></div>
+      <ClockDial selected={app.clock} availability={clockAvail} disabled={radial} onchange={(clock) => patch({ clock })} />
+      {#if radial}<p class="note">The clock angle is undefined for radial IMF (cone &lt; 30° or &gt; 150°), so it is not applied.</p>{/if}
+    {/if}
   </div>
 
   <div class="ctl">
-    <div class="row"><span class="eyebrow">Cone angle (°)</span></div>
+    <div class="row"><span class="eyebrow">Cone angle (°) · {app.frame === 'PGSM' ? 'from −V_sw' : 'from +X'}</span></div>
     <BinBar labels={coneLabels} selected={app.cone} availability={coneAvail} ariaLabel="cone angle bins" onchange={(cone) => patch({ cone })} />
   </div>
 
@@ -53,7 +62,7 @@
 
   <div class="pin">
     {#if app.pinA}
-      <div class="achip"><span class="tagA">A</span><span class="mono small">{conditionSummary({ ...app.pinA, frame: app.frame }).split(' · ').slice(1).join(' · ')}</span></div>
+      <div class="achip"><span class="tagA">A</span><span class="mono small">{conditionSummary({ ...app.pinA, frame: app.frame, clockDeg: app.clockDeg }).split(' · ').slice(1).join(' · ')}</span></div>
       <div class="row2">
         <button type="button" class="chip" onclick={() => patch({ pinA: { clock: [...app.clock], cone: [...app.cone], ma: [...app.ma] } })}>re-pin current as A</button>
         <button type="button" class="chip" onclick={() => patch({ pinA: null, cmp: 'B', range: null })}>unpin</button>

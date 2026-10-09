@@ -5,12 +5,15 @@
   import { display } from '../state/display.svelte';
   import { FLAG } from '../core/compute';
   import { grid } from '../core/grid';
+  import { atlasPhiDeg, mod } from '../core/frames';
+  import { imfClockOf, rotationOf } from '../state/imf';
   import { cellBounds } from '../core/geometry';
   import { depthBin, shellCellAt, SHELL_GRID } from '../core/shell';
   import { lutBytes, lutColor } from '../render/lut';
 
   const W = 288, H = 120, TH_MAX = SHELL_GRID.thetaMax;
   let canvas: HTMLCanvasElement;
+  const rot = $derived(rotationOf(app));
 
   $effect(() => {
     const r = display.shown, s = display.shell, ctx = canvas?.getContext('2d');
@@ -22,23 +25,35 @@
     for (let j = 0; j < s.nTheta; j++)
       for (let k = 0; k < s.nPhi; k++) {
         const at = j * s.nPhi + k, f = s.flags[at];
-        const x = k * cw, y = j * ch;
         if (f === FLAG.EMPTY) continue;
-        ctx.fillStyle = lutColor(bytes, (s.values[at] - lo) / (hi - lo));
-        ctx.fillRect(x, y, cw + 0.5, ch + 0.5);
-        if (f === FLAG.WEAK) {
-          ctx.fillStyle = 'rgba(58,70,85,0.75)';
+        const x0 = (mod((k * 360) / s.nPhi - rot, 360) / 360) * W, y = j * ch;
+        const color = lutColor(bytes, (s.values[at] - lo) / (hi - lo));
+        const paint = (x: number) => {
+          ctx.fillStyle = color;
           ctx.fillRect(x, y, cw + 0.5, ch + 0.5);
-          ctx.strokeStyle = 'rgba(215,222,230,0.35)';
-          ctx.beginPath(); ctx.moveTo(x, y + ch); ctx.lineTo(x + cw, y); ctx.stroke();
-        }
+          if (f === FLAG.WEAK) {
+            ctx.fillStyle = 'rgba(58,70,85,0.75)';
+            ctx.fillRect(x, y, cw + 0.5, ch + 0.5);
+            ctx.strokeStyle = 'rgba(215,222,230,0.35)';
+            ctx.beginPath(); ctx.moveTo(x, y + ch); ctx.lineTo(x + cw, y); ctx.stroke();
+          }
+        };
+        paint(x0);
+        if (x0 + cw > W) paint(x0 - W);
       }
+    const ic = imfClockOf(app);
+    if (ic !== null) {
+      const x = (mod(90 - ic, 360) / 360) * W; // azimuth of the IMF component across X
+      ctx.fillStyle = '#E8C547';
+      ctx.beginPath(); ctx.moveTo(x - 4, 0); ctx.lineTo(x + 4, 0); ctx.lineTo(x, 6); ctx.fill();
+    }
     if (app.probe >= 0) {
       const b = cellBounds(app.probe);
       if (depthBin(app.depth) === depthBin((b.d[0] + b.d[1]) / 2)) {
         ctx.strokeStyle = '#D7DEE6'; ctx.lineWidth = 2;
-        ctx.strokeRect((b.phi[0] / 360) * W + 1, (b.theta[0] / TH_MAX) * H + 1,
-          ((b.phi[1] - b.phi[0]) / 360) * W - 2, ((b.theta[1] - b.theta[0]) / TH_MAX) * H - 2);
+        const px = (mod(b.phi[0] - rot, 360) / 360) * W, pw = ((b.phi[1] - b.phi[0]) / 360) * W;
+        for (const x of px + pw > W ? [px, px - W] : [px])
+          ctx.strokeRect(x + 1, (b.theta[0] / TH_MAX) * H + 1, pw - 2, ((b.theta[1] - b.theta[0]) / TH_MAX) * H - 2);
       }
     }
   });
@@ -48,12 +63,12 @@
     if (!s) return;
     const b = canvas.getBoundingClientRect();
     const u = (e.clientX - b.left) / b.width, v = (e.clientY - b.top) / b.height;
-    const k = Math.min(s.nPhi - 1, Math.floor(u * s.nPhi)), j = Math.min(s.nTheta - 1, Math.floor(v * s.nTheta));
+    const phiAtlas = atlasPhiDeg(u * 360, rot);
+    const k = Math.min(s.nPhi - 1, Math.floor((phiAtlas / 360) * s.nPhi)), j = Math.min(s.nTheta - 1, Math.floor(v * s.nTheta));
     if (s.flags[j * s.nPhi + k] === FLAG.EMPTY) return;
-    const cell = shellCellAt(app.depth, v * TH_MAX, u * 360);
+    const cell = shellCellAt(app.depth, v * TH_MAX, phiAtlas);
     if (cell !== null) patch({ probe: cell });
   }
-  const pgsm = $derived(app.frame !== 'GSM');
   const bin = $derived(depthBin(app.depth));
   const depthLabel = $derived(app.source === 'knn' ? `D = ${app.depth.toFixed(2)}`
     : `${grid.dEdges[bin].toFixed(1)}–${grid.dEdges[bin + 1].toFixed(1)}`);
@@ -68,7 +83,7 @@
   <div class="plot">
     <span class="yl">θ 0°</span><span class="yl bottom">{TH_MAX}°</span>
     <canvas bind:this={canvas} width={W} height={H} onclick={pick} aria-label="Map of the selected shell: azimuth across, angle from the Sun-Earth line down. Click a cell to inspect it."></canvas>
-    <div class="xl"><span>0° +Y</span><span>90° +Z{pgsm ? ' (IMF)' : ''}</span><span>180° −Y</span><span>270° −Z</span><span>360°</span></div>
+    <div class="xl"><span>0° +Y</span><span>90° +Z</span><span>180° −Y</span><span>270° −Z</span><span>360°</span></div>
   </div>
 </div>
 

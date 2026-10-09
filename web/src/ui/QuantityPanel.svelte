@@ -6,6 +6,7 @@
   import CopyPython from './CopyPython.svelte';
   import { stats } from '../state/stats.svelte';
   import { data } from '../state/data.svelte';
+  import { tintAvailable, tintReason } from '../state/imf';
   import { hasVectors } from '../core/atlas';
 
   const q = grid.raw.quantities;
@@ -20,7 +21,7 @@
     const allowed = STATS_FOR[source] as readonly string[];
     patch({ source, range: null, stat: allowed.includes(app.stat) ? app.stat : (allowed[0] as typeof app.stat) });
   };
-  const fold = $derived(app.frame === 'PGSM_fold');
+  const tintOk = $derived(tintAvailable(app.frame, app.clock, app.cone));
   const vectors = $derived(hasVectors(data.manifest));
   const NO_VECTORS = 'this atlas has no flow/field data (vector sums)';
   // spec labels are plain text ("N_p / N_p,sw", "cm^-3"); render subscripts and superscripts
@@ -96,9 +97,9 @@
     <label class="opt"><input type="checkbox" checked={app.layers.includes('slice')} onchange={() => toggleLayer('slice')} /><span>Data on slice plane</span></label>
     <label class="opt"><input type="checkbox" checked={app.layers.includes('mp')} onchange={() => toggleLayer('mp')} /><span>Magnetopause</span></label>
     <label class="opt"><input type="checkbox" checked={app.layers.includes('bs')} onchange={() => toggleLayer('bs')} /><span>Bow shock</span></label>
-    <label class="opt" class:off={!fold} title={fold ? '' : 'The quasi-parallel side depends on the sign of Bx unless the IMF polarity is folded'}>
-      <input type="checkbox" disabled={!fold} checked={app.layers.includes('tint')} onchange={() => toggleLayer('tint')} />
-      <span>Shock tinted by θ<sub>Bn</sub>{#if !fold}<span class="muted small"> (needs fold)</span>{/if}</span></label>
+    <label class="opt" class:off={!tintOk} title={tintOk ? 'Bow shock coloured by the angle θBn between its normal and the IMF arrow' : `Off: ${tintReason(app.frame, app.clock, app.cone)}`}>
+      <input type="checkbox" disabled={!tintOk} checked={app.layers.includes('tint')} onchange={() => toggleLayer('tint')} />
+      <span>Shock tinted by θ<sub>Bn</sub>{#if !tintOk}<span class="muted small"> (IMF direction ambiguous)</span>{/if}</span></label>
     <label class="opt"><input type="checkbox" checked={app.layers.includes('shells')} onchange={() => toggleLayer('shells')} /><span title="The surface of constant depth D between the magnetopause and the bow shock, coloured like the map below; the map's depth slider moves it">Depth shell (D of the map)</span></label>
     <label class="opt" class:off={!vectors} title={vectors ? '' : NO_VECTORS}><input type="checkbox" disabled={!vectors} checked={vectors && app.layers.includes('flow')} onchange={() => toggleLayer('flow')} /><span title={vectors ? 'Ion bulk-flow streamlines from just inside the bow shock (dayside), traced downstream through the k-NN mean velocity' : NO_VECTORS}>Flow lines (V)</span></label>
     <label class="opt" class:off={!vectors} title={vectors ? '' : NO_VECTORS}><input type="checkbox" disabled={!vectors} checked={vectors && app.layers.includes('field')} onchange={() => toggleLayer('field')} /><span title={vectors ? "Magnetic field lines through the depth shell's D, traced both ways through the k-NN mean field" : NO_VECTORS}>Field lines (B)</span></label>
@@ -107,8 +108,6 @@
         <input type="range" min="50" max="400" step="10" value={app.density} onchange={(e) => patch({ density: Number((e.currentTarget as HTMLInputElement).value) })} />
         <span class="mono">{app.density}</span></label>
     {/if}
-    <label class="opt" class:off={app.frame === 'GSM'} title="In PGSM, +Z is the IMF direction; this arrow shows where the GSM Z axis (the dipole) lies for the selected clock angles">
-      <input type="checkbox" disabled={app.frame === 'GSM'} checked={app.layers.includes('zgsm')} onchange={() => toggleLayer('zgsm')} /><span>Z<sub>GSM</sub> direction</span></label>
     <label class="opt" title="Hatch cells whose samples come from few spacecraft passes (distinct spacecraft-hours): bins N_eff &lt; {grid.reliability.min_neff}, k-NN &lt; {grid.raw.knn.min_neff}">
       <input type="checkbox" checked={app.neff} onchange={() => patch({ neff: !app.neff })} /><span>Flag few-pass cells (N<sub>eff</sub>)</span></label>
   </div>
