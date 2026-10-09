@@ -22,7 +22,9 @@
   }
 </script>
 
-<div class="bar" role="group" aria-label={ariaLabel}>
+<!-- at most 6 bins per row: the 12 cone bins become 0–90° (Bx > 0) over 90–180° (Bx < 0) -->
+<div class="bar" role="group" aria-label={ariaLabel}
+  style:grid-template-columns={`repeat(${Math.min(labels.length, 6)}, minmax(0, 1fr))`}>
   {#each labels as l, i (i)}
     {@const a = availability ? availability[i] / maxAvail : 0}
     <button type="button" aria-pressed={selected.includes(i)} onclick={(e) => toggle(i, e)}
@@ -34,8 +36,8 @@
 </div>
 
 <style>
-  .bar { display: flex; gap: 2px; }
-  button { flex: 1; position: relative; min-width: 0; height: 34px; border: 1px solid var(--rule); border-radius: 3px;
+  .bar { display: grid; gap: 2px; }
+  button { position: relative; min-width: 0; height: 34px; border: 1px solid var(--rule); border-radius: 3px;
     background: transparent; color: var(--muted); font: 10.5px var(--f-mono); cursor: pointer; overflow: hidden; padding: 0 2px; }
   .fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--mp); opacity: 0.18; }
   .txt { position: relative; }

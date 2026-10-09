@@ -51,7 +51,8 @@
   </div>
 
   <div class="ctl">
-    <div class="row"><span class="eyebrow">Cone angle (°) · {app.frame === 'PGSM' ? 'from −V_sw' : 'from +X'}</span></div>
+    <div class="row"><span class="eyebrow">Cone angle (°)</span>
+      <span class="mono muted">{app.frame === 'PGSM' ? 'from −V_sw' : 'from +X'}</span></div>
     <BinBar labels={coneLabels} selected={app.cone} availability={coneAvail} ariaLabel="cone angle bins" onchange={(cone) => patch({ cone })} />
   </div>
 
@@ -87,7 +88,7 @@
 </section>
 
 <style>
-  .panel { display: grid; gap: 16px; align-content: start; }
+  .panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-content: start; }
   header, .row { display: flex; flex-wrap: nowrap; white-space: nowrap; justify-content: space-between; align-items: baseline; gap: 8px; }
   .ctl { display: grid; gap: 6px; }
   .presets { display: flex; flex-wrap: wrap; gap: 4px; }
