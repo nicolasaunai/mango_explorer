@@ -111,17 +111,23 @@ def read_cube(root: Path, entry: dict, grid: Grid) -> CubeData:
     )
 
 
-def write_samples(root: Path, table: dict[str, np.ndarray], cube_id: str, fraction: float) -> dict:
-    """The k-NN sample table: base geometry in one file, one float32 file per quantity."""
+def write_samples(root: Path, table: dict[str, np.ndarray], frame: str, cube_id: str, fraction: float) -> dict:
+    """One frame's k-NN sample table: base geometry in one file, one float32 file per quantity."""
     base = {k: v for k, v in table.items() if not k.startswith("q:")}
-    entry = {"cube": cube_id, "fraction": fraction, "n": len(table["x"]),
-             "base": {"path": "samples/base.bin", "sections": _write_sections(root / "samples/base.bin", list(base.items()))},
-             "quantities": {}}
+    rel = f"samples/{frame}/base.bin"
+    entry = {"frame": frame, "cube": cube_id, "fraction": fraction, "n": len(table["x"]),
+             "base": {"path": rel, "sections": _write_sections(root / rel, list(base.items()))}, "quantities": {}}
     for k, v in table.items():
         if k.startswith("q:"):
-            rel = f"samples/{k[2:]}.bin"
+            rel = f"samples/{frame}/{k[2:]}.bin"
             entry["quantities"][k[2:]] = {"path": rel, "sections": _write_sections(root / rel, [("value", v)])}
     return entry
+
+
+def write_hours(root: Path, frame: str, hours: dict[str, np.ndarray]) -> dict:
+    rel = f"hours/{frame}.bin"
+    return {"frame": frame, "path": rel, "n_rows": len(hours["n"]),
+            "sections": _write_sections(root / rel, list(hours.items()))}
 
 
 def write_voxels(root: Path, vox: dict) -> dict:
@@ -149,25 +155,21 @@ def read_samples(root: Path, entry: dict) -> dict[str, np.ndarray]:
     return out
 
 
-def write_atlas(root: Path, grid: Grid, cubes: list[CubeData], hours: dict[str, np.ndarray],
-                info: dict, samples: dict | None = None, voxels: list[dict] | None = None) -> dict:
+def write_atlas(root: Path, grid: Grid, parts: list[dict], info: dict, fraction: float) -> dict:
+    """`parts`: one dict per frame with keys frame, cube (CubeData), hours, samples (table), voxels."""
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "format": "mango-atlas/1",
+        "format": "mango-atlas/2",
         "grid": grid.version,
         "created": datetime.now(UTC).isoformat(timespec="seconds"),
         **info,
-        "hours": {"path": "hours.bin", "n_rows": len(hours["n"]),
-                  "sections": _write_sections(root / "hours.bin", list(hours.items()))},
-        "cubes": [write_cube(root, c) for c in cubes],
+        "hours": [write_hours(root, p["frame"], p["hours"]) for p in parts],
+        "cubes": [write_cube(root, p["cube"]) for p in parts],
+        "samples": [write_samples(root, p["samples"], p["frame"], p["cube"].cube_id, fraction) for p in parts],
+        "voxels": {"size_re": grid.raw["voxels"]["size_re"], "frames": [write_voxels(root, p["voxels"]) for p in parts]},
         "js_types": _JS_TYPES,
     }
-    if voxels:
-        manifest["voxels"] = {"size_re": grid.raw["voxels"]["size_re"],
-                              "frames": [write_voxels(root, v) for v in voxels]}
-    if samples is not None:
-        manifest["samples"] = write_samples(root, samples["table"], samples["cube"], samples["fraction"])
     (root / "manifest.json").write_text(json.dumps(manifest, indent=1))
     return manifest
 
@@ -194,9 +196,10 @@ def pack_atlas(src: Path, dst: Path, sample_fraction: float | None = None) -> di
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_bytes(gzip.compress(data, compresslevel=9, mtime=0))
 
-    if sample_fraction is not None and "samples" in manifest:
-        _thin_samples(src, manifest, sample_fraction)
-    pack(manifest["hours"])
+    if sample_fraction is not None:
+        manifest["samples"] = [_thin_samples(src, e, sample_fraction) for e in manifest["samples"]]
+    for h in manifest["hours"]:
+        pack(h)
     for cube in manifest["cubes"]:
         for f in cube["quantities"].values():
             pack(f)
@@ -207,22 +210,21 @@ def pack_atlas(src: Path, dst: Path, sample_fraction: float | None = None) -> di
         pack(v["base"])
         for f in v["quantities"].values():
             pack(f)
-    if "samples" in manifest:
-        pack(manifest["samples"]["base"])
-        for f in manifest["samples"]["quantities"].values():
+    for e in manifest["samples"]:
+        pack(e["base"])
+        for f in e["quantities"].values():
             pack(f)
     manifest["encoding"] = "gzip"
     (dst / "manifest.json").write_text(json.dumps(manifest, indent=1))
     return manifest
 
 
-def _thin_samples(src: Path, manifest: dict, fraction: float) -> None:
-    """Rewrite the sample table (in a temporary copy) keeping a random subset of its rows."""
+def _thin_samples(src: Path, entry: dict, fraction: float) -> dict:
+    """Rewrite one frame's sample table (in a temporary copy) keeping a random subset of its rows."""
     import tempfile
 
-    entry = manifest["samples"]
     if fraction >= entry["fraction"]:
-        return
+        return entry
     table = read_samples(src, entry)
     keep = np.random.default_rng(0).random(len(table["x"])) < fraction / entry["fraction"]
     off = table["cond_offsets"].astype(np.int64)
@@ -230,10 +232,10 @@ def _thin_samples(src: Path, manifest: dict, fraction: float) -> None:
     new = {k: v[keep] for k, v in table.items() if k != "cond_offsets"}
     new["cond_offsets"] = np.searchsorted(cond, np.arange(len(off))).astype(np.uint32)
     tmp = Path(tempfile.mkdtemp())
-    thinned = write_samples(tmp, new, entry["cube"], fraction)
+    thinned = write_samples(tmp, new, entry["frame"], entry["cube"], fraction)
     for f in [thinned["base"], *thinned["quantities"].values()]:
         f["_root"] = str(tmp)  # pack reads these files from the temporary copy
-    manifest["samples"] = thinned
+    return thinned
 
 
 def read_atlas(root: Path):
@@ -241,5 +243,5 @@ def read_atlas(root: Path):
     manifest = json.loads((root / "manifest.json").read_text())
     grid = load_grid(manifest["grid"])
     cubes = [read_cube(root, e, grid) for e in manifest["cubes"]]
-    hours = _read_sections(root / manifest["hours"]["path"], manifest["hours"]["sections"])
+    hours = {h["frame"]: _read_sections(root / h["path"], h["sections"]) for h in manifest["hours"]}
     return manifest, cubes, hours

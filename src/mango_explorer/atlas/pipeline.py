@@ -1,4 +1,4 @@
-"""Build an atlas from a stream of row chunks."""
+"""Build an atlas from per-frame streams of canonical column chunks."""
 from __future__ import annotations
 
 import time
@@ -16,39 +16,33 @@ from mango_explorer.atlas.store import write_atlas
 from mango_explorer.atlas.voxels import VoxelAccumulator
 
 
-def build_atlas(chunks, grid: Grid, out_dir: Path, *, frames=None, cube_ids=None,
-                source: dict | None = None, sample_fraction: float | None = None, log=print) -> dict:
-    frames = tuple(frames or grid.frames)
-    cube_ids = tuple(cube_ids or [c["id"] for c in grid.raw["cubes"]])
-    accs = [CubeAccumulator(grid, cid, f) for cid in cube_ids for f in frames]
-    hours = HourAccumulator(grid)
+def build_atlas(streams, grid: Grid, out_dir: Path, *, source: dict | None = None,
+                sample_fraction: float | None = None, log=print) -> dict:
+    """`streams`: {frame: iterable of canonical column chunks}; frames are built one after the other."""
     fraction = grid.raw["knn"]["sample_fraction"] if sample_fraction is None else sample_fraction
-    samples = SampleAccumulator(grid, cube_ids[0], fraction)
-    voxels = [VoxelAccumulator(grid, cube_ids[0], f) for f in frames]
-    stats = Counter()
+    parts, stats = [], {}
     t0 = time.perf_counter()
-    for cols in chunks:
-        prep = prepare(cols, grid, frames)
-        stats["rows_in"] += prep.n_in
-        stats["rows_kept"] += prep.n_kept
-        stats.update({f"dropped_{k}": v for k, v in prep.dropped.items()})
-        # rows whose mapped V and B are both finite (they need R_mp and R_bs): the flow/field line sums
-        stats["rows_with_vectors"] += 0 if prep.vectors is None else int(
-            np.all([np.isfinite(v).all(axis=1) for v in prep.vectors.values()], axis=0).sum())
-        for acc in accs:
-            acc.add(prep)
-        hours.add(prep)
-        samples.add(prep)
-        for v in voxels:
-            v.add(prep)
-        log(f"  {stats['rows_in']:>12,} rows  {time.perf_counter() - t0:7.1f} s")
-    if stats["rows_with_vectors"] < 0.9 * stats["rows_kept"]:
-        log(f"  WARNING: only {stats['rows_with_vectors']:,} of {stats['rows_kept']:,} kept rows have finite "
-            "V and B mapped to normalized space (rows_with_vectors < 90 %): check R_mp / R_bs")
-    cubes = [a.finalize() for a in accs]
-    manifest = write_atlas(out_dir, grid, cubes, hours.finalize(), {
-        "source": source or {}, "stats": dict(stats),
-        "build_seconds": round(time.perf_counter() - t0, 2),
-    }, samples={"table": samples.finalize(), "cube": cube_ids[0], "fraction": fraction},
-        voxels=[v.finalize() for v in voxels])
-    return manifest
+    for frame, chunks in streams.items():
+        cube = CubeAccumulator(grid, grid.cube_of_frame(frame))
+        hours, samples, voxels = HourAccumulator(grid, frame), SampleAccumulator(grid, frame, fraction), \
+            VoxelAccumulator(grid, frame)
+        s = Counter()
+        for c in chunks:
+            prep = prepare(c, grid, frame)
+            s["rows_in"] += prep.n_in
+            s["rows_kept"] += prep.n_kept
+            s.update({f"dropped_{k}": v for k, v in prep.dropped.items()})
+            # rows whose mapped V and B are both finite (they need R_mp and R_bs): the flow/field line sums
+            s["rows_with_vectors"] += 0 if prep.vectors is None else int(
+                np.all([np.isfinite(v).all(axis=1) for v in prep.vectors.values()], axis=0).sum())
+            for acc in (cube, hours, samples, voxels):
+                acc.add(prep)
+            log(f"  {frame} {s['rows_in']:>12,} rows  {time.perf_counter() - t0:7.1f} s")
+        if s["rows_with_vectors"] < 0.9 * s["rows_kept"]:
+            log(f"  WARNING {frame}: only {s['rows_with_vectors']:,} of {s['rows_kept']:,} kept rows have finite "
+                "V and B mapped to normalized space (rows_with_vectors < 90 %): check R_mp / R_bs")
+        stats[frame] = dict(s)
+        parts.append({"frame": frame, "cube": cube.finalize(), "hours": hours.finalize(),
+                      "samples": samples.finalize(), "voxels": voxels.finalize()})
+    return write_atlas(out_dir, grid, parts, {"source": source or {}, "stats": stats,
+                                              "build_seconds": round(time.perf_counter() - t0, 2)}, fraction)

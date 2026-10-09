@@ -121,9 +121,6 @@ class Grid:
         from mango_explorer import boundaries as b
 
         ref = self.raw["reference_boundaries"]
-        if ref["kind"] == "paraboloid":
-            mp, bs = ref["magnetopause"], ref["bow_shock"]
-            return (lambda t: b.paraboloid_r(t, mp["nose"], mp["p"])), (lambda t: b.paraboloid_r(t, bs["nose"], bs["p"]))
         mp, bs = ref["magnetopause"], ref["bow_shock"]
         r0, a = b.shue_r0(mp["bz_nt"], mp["pd_npa"]), b.shue_alpha(mp["bz_nt"], mp["pd_npa"])
         return (lambda t: b.shue_mp(t, r0, a)), (lambda t: b.jelinek_bs(t, bs["pd_npa"]))
@@ -134,6 +131,6 @@ class Grid:
 
 
 @cache
-def load_grid(version: str = "grid-v2") -> Grid:
+def load_grid(version: str = "grid-v3") -> Grid:
     text = resources.files("mango_explorer").joinpath("spec", f"{version}.json").read_text()
     return Grid(json.loads(text))

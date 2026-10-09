@@ -1,7 +1,7 @@
 """k-nearest-neighbour statistics: the reference the web explorer's k-NN mode must match.
 
-Samples sit at their MANGO normalized positions (X/Y/Z_gsm_norm), rotated into the chosen frame
-about X. Distances are Euclidean in R_E in that space; time plays no role.
+Samples sit at the frame's MANGO normalized positions. Distances are Euclidean in R_E in that
+space; time plays no role.
 
 A node gets the statistics of its k nearest samples, or NaN when the distance of the
 ceil(k/2)-th nearest exceeds the cap ("the median neighbour distance exceeds the cap").
@@ -12,21 +12,8 @@ from __future__ import annotations
 import numpy as np
 
 from mango_explorer.atlas.binning import flat_condition_index
-from mango_explorer.atlas.frames import rotate_about_x
 from mango_explorer.atlas.grid import Grid
 from mango_explorer.atlas.prepare import Prepared
-
-
-def frame_positions(frame: str, xyz, clock_deg, bx_neg) -> np.ndarray:
-    """Normalized GSM positions (n, 3) expressed in `frame` (see atlas.frames)."""
-    xyz = np.asarray(xyz, dtype=float)
-    if frame == "GSM":
-        return xyz.copy()
-    angle = np.radians(np.asarray(clock_deg, dtype=float))
-    if frame == "PGSM_fold":
-        angle = angle + np.pi * np.asarray(bx_neg, dtype=bool)
-    y, z = rotate_about_x(xyz[:, 1], xyz[:, 2], angle)
-    return np.stack([xyz[:, 0], y, z], axis=1)
 
 
 def sample_keep(interval, t_ns, fraction: float) -> np.ndarray:
@@ -78,19 +65,20 @@ def knn_stats(nodes, positions, values, intervals, k: int, cap: float, search_fa
 class SampleAccumulator:
     """Collects the per-sample table (a deterministic random fraction) that the web k-NN mode searches."""
 
-    def __init__(self, grid: Grid, cube_id: str, fraction: float | None = None):
-        self.grid, self.cube_id = grid, cube_id
+    def __init__(self, grid: Grid, frame: str, fraction: float | None = None):
+        self.grid, self.frame = grid, frame
+        self.cube_id = grid.cube_of_frame(frame)
         self.fraction = grid.raw["knn"]["sample_fraction"] if fraction is None else fraction
-        self.dims, self.shape = grid.cube_dims(cube_id), grid.cube_shape(cube_id)
+        self.dims, self.shape = grid.cube_dims(self.cube_id), grid.cube_shape(self.cube_id)
         self._parts: list[dict[str, np.ndarray]] = []
 
     def add(self, prep: Prepared) -> None:
         cond = flat_condition_index(prep.cond_bins, self.dims, self.shape)
-        keep = (cond >= 0) & (next(iter(prep.cells.values())) >= 0)
+        keep = (cond >= 0) & (prep.cells[self.frame] >= 0)
         keep &= sample_keep(prep.interval, prep.t_ns, self.fraction)
         part = {
             "cond": cond, "x": prep.xyz[:, 0], "y": prep.xyz[:, 1], "z": prep.xyz[:, 2],
-            "clock_deg": prep.clock_deg, "bx_neg": prep.bx_neg, "interval": prep.interval,
+            "interval": prep.interval,
             **{f"q:{q}": v for q, v in prep.values.items()},
         }
         self._parts.append({k: np.asarray(v)[keep] for k, v in part.items()})
@@ -105,9 +93,7 @@ class SampleAccumulator:
         table = {
             "cond_offsets": np.searchsorted(cols["cond"], np.arange(n_cond + 1)).astype(np.uint32),
             "x": cols["x"].astype(np.float32), "y": cols["y"].astype(np.float32), "z": cols["z"].astype(np.float32),
-            "clock_deg": cols["clock_deg"].astype(np.float32),
             "interval": ((sc << 24) | hour).astype(np.uint32),
-            "bx_neg": cols["bx_neg"].astype(np.uint8),
         }
         for k, v in cols.items():
             if k.startswith("q:"):

@@ -1,15 +1,15 @@
 """Per-cell statistics straight from MANGO rows: the Python twin of what the web explorer shows.
 
     import space_mango as sm
-    from mango_explorer.atlas import COLUMNS, cell_statistics
-    result = sm.get_data("magnetosheath", columns=list(COLUMNS), sw_paired_only=True,
-                         normalized_only=True, ma_sw_min=6, ma_sw_max=12)
-    cells = cell_statistics(result, frame="PGSM_fold", quantity="Np_ratio",
-                            selection={"cone_deg": [2, 3], "Ma_sw": [2, 3]})
+    from mango_explorer.atlas import FRAME_COLUMNS, cell_statistics
+    result = sm.get_data("magnetosheath", frame="pgsm", cone=[30, 60], clock=0,
+                         columns=list(FRAME_COLUMNS["PGSM"]), ma_sw_min=6, ma_sw_max=12)
+    cells = cell_statistics(result, frame="PGSM", quantity="Np_ratio", selection={"cone_deg": [2, 3]})
 
-`df` is a space_mango MangoResult (>= 0.2) or a polars DataFrame. `selection` lists grid bins
-per conditioning variable (see grid-v2.json), exactly as the explorer's URL does. The `median`, `q25`, `q75` columns come from the same fixed-edge histograms
-as the explorer; `median_exact` is the plain median of the samples in the cell.
+`df` is a space_mango MangoResult or a polars DataFrame of the frame's columns (FRAME_COLUMNS);
+`selection` lists grid bins per conditioning variable (see grid-v3.json), as the explorer's URL does.
+`median`, `q25`, `q75` come from the same fixed-edge histograms as the explorer; `median_exact` is the
+plain median of the samples in the cell.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from mango_explorer.atlas.grid import Grid, load_grid
 from mango_explorer.atlas.prepare import prepare
 from mango_explorer.atlas.quantities import quantity_values, row_mask
 from mango_explorer.atlas.reference import reference_query
-from mango_explorer.atlas.sources import columns_from_polars
+from mango_explorer.atlas.sources import canonical_columns
 from mango_explorer.atlas.stats import hist_quantile
 
 
@@ -30,10 +30,10 @@ def cell_statistics(df, frame: str, quantity: str, selection: dict | None = None
 
     g = grid or load_grid()
     selection = selection or {}
-    if hasattr(df, "to_polars"):  # space_mango >= 0.2 returns a MangoResult
+    if hasattr(df, "to_polars"):
         df = df.to_polars()
-    cols = columns_from_polars(df)
-    prep = prepare(cols, g, [frame])
+    c = canonical_columns(df, frame)
+    prep = prepare(c, g, frame)
     ref = reference_query(prep, g, frame, selection, quantity)
     cells = np.flatnonzero(ref["n"])
     edges = g.hist_axis_edges(quantity)
@@ -45,7 +45,7 @@ def cell_statistics(df, frame: str, quantity: str, selection: dict | None = None
     for name, bins in selection.items():
         if bins is not None:
             keep &= np.isin(prep.cond_bins[name], list(bins))
-    raw = quantity_values({k: np.asarray(v)[row_mask(cols)] for k, v in cols.items()})[quantity]
+    raw = quantity_values({k: np.asarray(v)[row_mask(c, g, frame)] for k, v in c.items()})[quantity]
     ok = keep & np.isfinite(raw) & (prep.hist[quantity] >= 0)
     exact = (pl.DataFrame({"cell": prep.cells[frame][ok], "v": raw[ok]})
              .group_by("cell").agg(pl.col("v").median().alias("median_exact")))

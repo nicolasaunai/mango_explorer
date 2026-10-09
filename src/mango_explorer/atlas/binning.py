@@ -46,10 +46,10 @@ def spatial_cells(d, theta_deg, phi_deg, grid: Grid) -> np.ndarray:
 
 def condition_bins(values: dict[str, np.ndarray], grid: Grid) -> dict[str, np.ndarray]:
     out = {}
-    for name in grid.condition_names:
+    for name, v in values.items():
         edges = grid.condition_edges(name)
         f = periodic_digitize if grid.condition_is_periodic(name) else digitize
-        out[name] = f(values[name], edges)
+        out[name] = f(v, edges)
     return out
 
 

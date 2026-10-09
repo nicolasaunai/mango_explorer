@@ -86,8 +86,9 @@ class CubeData:
 class CubeAccumulator:
     """Streams Prepared chunks into one cube for one frame."""
 
-    def __init__(self, grid: Grid, cube_id: str, frame: str):
-        self.grid, self.cube_id, self.frame = grid, cube_id, frame
+    def __init__(self, grid: Grid, cube_id: str):
+        self.grid, self.cube_id = grid, cube_id
+        self.frame = grid.cube_frame(cube_id)
         self.dims = grid.cube_dims(cube_id)
         self.shape = grid.cube_shape(cube_id)
         self._hist = {q: ([], []) for q in grid.quantity_names}

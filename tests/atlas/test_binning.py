@@ -18,7 +18,8 @@ G = load_grid()
 def test_grid_shapes():
     assert G.spatial_shape == (10, 20, 24)
     assert G.n_cells == 4800
-    assert G.cube_shape("clock-cone-Ma") == (12, 6, 5)
+    assert G.cube_shape("clock-cone-Ma") == (12, 12, 5)
+    assert G.cube_shape("cone-Ma") == (12, 5)
     assert G.n_hist == 48
 
 
@@ -43,9 +44,9 @@ def test_spatial_cell_order_is_d_theta_phi():
 
 
 def test_flat_condition_index_row_major():
-    bins = {"clock_deg": np.array([11, 0]), "cone_deg": np.array([5, -1]), "Ma_sw": np.array([4, 0])}
-    flat = flat_condition_index(bins, ("clock_deg", "cone_deg", "Ma_sw"), (12, 6, 5))
-    assert flat.tolist() == [12 * 6 * 5 - 1, -1]
+    bins = {"clock_deg": np.array([11, 0]), "cone_deg": np.array([11, -1]), "Ma_sw": np.array([4, 0])}
+    flat = flat_condition_index(bins, ("clock_deg", "cone_deg", "Ma_sw"), (12, 12, 5))
+    assert flat.tolist() == [12 * 12 * 5 - 1, -1]
 
 
 def test_hist_bins_log_axis_and_clipping():

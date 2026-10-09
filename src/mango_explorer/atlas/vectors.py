@@ -2,7 +2,8 @@
 
 MANGO normalizes every position radially between the sample's own boundaries (R_mp, R_bs along its
 direction) and fixed reference surfaces. A line through the data maps with the Jacobian of that
-mapping, so each vector is pushed forward before averaging; tangents to the sample's boundaries then
+mapping, so each vector is pushed forward before averaging (vectors are those of the frame: GSM
+served, PGSM `*_pgsm`); tangents to the sample's boundaries then
 stay tangent to the reference ones. The sample's boundary slopes are not served: they are taken from
 the reference shapes, scaled by R_mp / R*_mp and R_bs / R*_bs (approximation A1).
 """
@@ -10,7 +11,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from mango_explorer.atlas.frames import rotate_about_x
 from mango_explorer.atlas.grid import Grid
 
 VECTORS = {"V_vec": (("Vx", "Vy", "Vz"), False), "B_vec": (("Bx", "By", "Bz"), True)}
@@ -55,31 +55,16 @@ def to_normalized(vec, xyz_norm, depth, r_mp, r_bs, grid: Grid) -> np.ndarray:
         return vr_n[:, None] * er + (k * vt)[:, None] * et + (k * vp)[:, None] * ep
 
 
-def in_frame(frame: str, vec, clock_deg, bx_neg, magnetic: bool) -> np.ndarray:
-    """GSM vectors (n, 3) expressed in `frame`; magnetic vectors flip under PGSM_fold when Bx_imf < 0."""
-    vec = np.asarray(vec, dtype=float)
-    if frame == "GSM":
-        return vec.copy()
-    angle = np.radians(np.asarray(clock_deg, dtype=float))
-    flip = np.zeros(len(vec), dtype=bool)
-    if frame == "PGSM_fold":
-        bx_neg = np.asarray(bx_neg, dtype=bool)
-        angle = angle + np.pi * bx_neg
-        if magnetic:
-            flip = bx_neg
-    y, z = rotate_about_x(vec[:, 1], vec[:, 2], angle)
-    out = np.stack([vec[:, 0], y, z], axis=1)
-    return np.where(flip[:, None], -out, out)
+def normalized_vectors(c: dict[str, np.ndarray], grid: Grid) -> dict[str, np.ndarray]:
+    """Every vector of VECTORS, pushed into the frame's normalized space; NaN where an input is missing.
 
-
-def normalized_vectors(cols: dict[str, np.ndarray], grid: Grid) -> dict[str, np.ndarray]:
-    """Every vector of VECTORS, pushed into normalized GSM space; NaN where an input is missing."""
-    n = len(cols["R_norm"])
+    In PGSM the pushforward is evaluated at the PGSM position (approximation A2 of the grid spec)."""
+    n = len(c["R_norm"])
     nan = np.full(n, np.nan)
-    xyz = np.stack([np.asarray(cols[c], dtype=float) for c in ("X_gsm_norm", "Y_gsm_norm", "Z_gsm_norm")], axis=1)
-    depth = np.asarray(cols["R_norm"], dtype=float)
-    r_mp = np.asarray(cols.get("R_mp", nan), dtype=float)
-    r_bs = np.asarray(cols.get("R_bs", nan), dtype=float)
-    return {name: to_normalized(np.stack([np.asarray(cols[c], dtype=float) for c in comps], axis=1),
+    xyz = np.stack([np.asarray(c[k], dtype=float) for k in ("X", "Y", "Z")], axis=1)
+    depth = np.asarray(c["R_norm"], dtype=float)
+    r_mp = np.asarray(c.get("R_mp", nan), dtype=float)
+    r_bs = np.asarray(c.get("R_bs", nan), dtype=float)
+    return {name: to_normalized(np.stack([np.asarray(c[k], dtype=float) for k in comps], axis=1),
                                 xyz, depth, r_mp, r_bs, grid)
             for name, (comps, _) in VECTORS.items()}

@@ -12,9 +12,8 @@ import numpy as np
 
 from mango_explorer.atlas.binning import flat_condition_index
 from mango_explorer.atlas.grid import Grid
-from mango_explorer.atlas.knn import frame_positions
 from mango_explorer.atlas.prepare import Prepared
-from mango_explorer.atlas.vectors import COMPONENTS, VECTORS, in_frame
+from mango_explorer.atlas.vectors import COMPONENTS, VECTORS
 
 
 def voxel_ids(xyz, grid: Grid) -> np.ndarray:
@@ -35,16 +34,17 @@ def voxel_centers(vid, grid: Grid) -> np.ndarray:
 class VoxelAccumulator:
     """Counts and sums per (condition bin, voxel) for one frame and every quantity."""
 
-    def __init__(self, grid: Grid, cube_id: str, frame: str):
+    def __init__(self, grid: Grid, frame: str):
         self.grid, self.frame = grid, frame
+        cube_id = grid.cube_of_frame(frame)
         self.dims, self.shape = grid.cube_dims(cube_id), grid.cube_shape(cube_id)
         self._parts: dict[str, list[tuple[np.ndarray, np.ndarray, np.ndarray]]] = {
             q: [] for q in [*grid.quantity_names, *COMPONENTS]}
 
     def add(self, prep: Prepared) -> None:
         cond = flat_condition_index(prep.cond_bins, self.dims, self.shape)
-        vid = voxel_ids(frame_positions(self.frame, prep.xyz, prep.clock_deg, prep.bx_neg), self.grid)
-        ok = (cond >= 0) & (vid >= 0) & (next(iter(prep.cells.values())) >= 0)
+        vid = voxel_ids(prep.xyz, self.grid)
+        ok = (cond >= 0) & (vid >= 0) & (prep.cells[self.frame] >= 0)
         key = (cond << 32) + vid
         for q, v in prep.values.items():
             m = ok & np.isfinite(v)
@@ -52,8 +52,8 @@ class VoxelAccumulator:
             self._push(q, u, np.bincount(inv, minlength=len(u)), np.bincount(inv, weights=v[m], minlength=len(u)))
         if prep.vectors is None:
             return
-        for name, (_, magnetic) in VECTORS.items():
-            vec = in_frame(self.frame, prep.vectors[name], prep.clock_deg, prep.bx_neg, magnetic)
+        for name in VECTORS:
+            vec = prep.vectors[name]
             m = ok & np.all(np.isfinite(vec), axis=1)
             u, inv = np.unique(key[m], return_inverse=True)
             n = np.bincount(inv, minlength=len(u))

@@ -1,4 +1,4 @@
-"""The hour table: one row per (spacecraft, N_eff interval, combination of condition bins).
+"""The hour table: one row per (spacecraft, N_eff interval, combination of the frame's condition bins).
 
 It is small (one row per interval and condition combination actually observed) and lets the web
 app give exact sample counts and exact N_eff for any condition selection, including the live
@@ -15,9 +15,9 @@ MISSING = 255
 
 
 class HourAccumulator:
-    def __init__(self, grid: Grid):
-        self.grid = grid
-        self.names = grid.condition_names
+    def __init__(self, grid: Grid, frame: str):
+        self.grid, self.frame = grid, frame
+        self.names = grid.frame_conditions(frame)
         self._keys: list[np.ndarray] = []
         self._counts: list[np.ndarray] = []
 
@@ -33,7 +33,7 @@ class HourAccumulator:
             rows, inv = np.unique(np.concatenate(self._keys), axis=0, return_inverse=True)
             counts = np.bincount(inv.ravel(), weights=np.concatenate(self._counts)).astype(np.int64)
             self._keys, self._counts = [rows], [counts]
-        ok = next(iter(prep.cells.values())) >= 0
+        ok = prep.cells[self.frame] >= 0
         rows = np.stack([prep.interval[ok], self._pack(prep, ok)], axis=1)
         if not len(rows):
             return

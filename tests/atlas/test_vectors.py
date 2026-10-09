@@ -1,9 +1,8 @@
 import numpy as np
 import pytest
 
-from mango_explorer.atlas import frames as fr
 from mango_explorer.atlas.grid import load_grid
-from mango_explorer.atlas.vectors import in_frame, normalized_vectors, to_normalized
+from mango_explorer.atlas.vectors import normalized_vectors, to_normalized
 
 G = load_grid()
 REF_MP, REF_BS = G.reference_radii()
@@ -67,20 +66,9 @@ def test_missing_boundaries_give_nan_vectors():
     assert np.all(np.isnan(_map([1.0, 0.0, 0.0], xyz, 0.5, np.nan, bs)))
 
 
-def test_in_frame_matches_vector_to_frame():
-    rng = np.random.default_rng(4)
-    imf, vec = rng.normal(0, 5, (50, 3)), rng.normal(0, 10, (50, 3))
-    clock = fr.clock_angle_deg(imf[:, 1], imf[:, 2])
-    for frame in fr.FRAMES:
-        for magnetic in (False, True):
-            want = np.stack(fr.vector_to_frame(frame, *vec.T, magnetic=magnetic,
-                                               bx_imf=imf[:, 0], by_imf=imf[:, 1], bz_imf=imf[:, 2]), 1)
-            np.testing.assert_allclose(in_frame(frame, vec, clock, imf[:, 0] < 0, magnetic), want, atol=1e-9)
-
-
 def test_normalized_vectors_without_boundary_columns_are_nan():
     cols = {c: np.ones(3) for c in ("Vx", "Vy", "Vz", "Bx", "By", "Bz", "R_norm")}
-    cols |= {"X_gsm_norm": np.full(3, 12.0), "Y_gsm_norm": np.zeros(3), "Z_gsm_norm": np.zeros(3)}
+    cols |= {"X": np.full(3, 12.0), "Y": np.zeros(3), "Z": np.zeros(3)}
     out = normalized_vectors(cols, G)
     assert set(out) == {"V_vec", "B_vec"} and np.all(np.isnan(out["V_vec"]))
 
@@ -90,21 +78,21 @@ def test_build_counts_rows_with_vectors_and_warns_when_few(tmp_path):
 
     from mango_explorer.atlas.pipeline import build_atlas
     from mango_explorer.atlas.prepare import prepare
-    from mango_explorer.atlas.sources import columns_from_polars, iter_polars
+    from mango_explorer.atlas.sources import canonical_columns, iter_polars
     from mango_explorer.atlas.store import read_atlas
-    from mango_explorer.atlas.synthetic import synthetic_magnetosheath
+    from mango_explorer.atlas.synthetic import synthetic_frame, synthetic_magnetosheath
 
     df = synthetic_magnetosheath(20_000, seed=5)
     for frac, warned in ((0.0, False), (0.2, True)):
         r_mp = df["R_mp"].to_numpy().copy()
         r_mp[np.random.default_rng(6).random(len(r_mp)) < frac] = np.nan
-        d = df.with_columns(pl.Series("R_mp", r_mp))
-        prep = prepare(columns_from_polars(d), G)
+        rows = synthetic_frame(df.with_columns(pl.Series("R_mp", r_mp)), "PGSM")
+        prep = prepare(canonical_columns(rows, "PGSM"), G, "PGSM")
         want = int(np.all([np.isfinite(v).all(axis=1) for v in prep.vectors.values()], axis=0).sum())
         lines = []
         out = tmp_path / f"f{frac}"
-        build_atlas(iter_polars(d, 7_000), G, out, frames=["PGSM"], log=lines.append)
-        stats = read_atlas(out)[0]["stats"]
+        build_atlas({"PGSM": iter_polars(rows, "PGSM", 7_000)}, G, out, log=lines.append)
+        stats = read_atlas(out)[0]["stats"]["PGSM"]
         assert stats["rows_with_vectors"] == want
         assert (want < stats["rows_kept"]) == (frac > 0)
         assert any("rows_with_vectors" in str(m) for m in lines) == warned
