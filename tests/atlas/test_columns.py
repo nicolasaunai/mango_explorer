@@ -65,6 +65,18 @@ def test_pgsm_without_the_computed_columns_says_what_is_missing():
         canonical(cols, "PGSM")
 
 
+def test_canonical_columns_with_missing_computed_column_raises_keyerror():
+    """canonical_columns selects only present columns; missing computed columns raise KeyError from canonical()."""
+    from mango_explorer.atlas.sources import canonical_columns
+    from mango_explorer.atlas.synthetic import synthetic_frame, synthetic_magnetosheath
+
+    df = synthetic_frame(synthetic_magnetosheath(2000, seed=1), "PGSM")
+    # Drop the cone_pgsm column so canonical() sees it's missing
+    df_without_cone = df.drop(PGSM_CONE)
+    with pytest.raises(KeyError, match="cone_pgsm"):
+        canonical_columns(df_without_cone, "PGSM")
+
+
 def test_mango_requests():
     g = load_grid("grid-v3")
     gsm = mango_request("GSM", g)
