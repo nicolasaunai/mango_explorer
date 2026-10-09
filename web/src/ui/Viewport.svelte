@@ -5,7 +5,7 @@
   import { data } from '../state/data.svelte';
   import { probe, probeKnn, stats } from '../state/stats.svelte';
   import { BOUNDARIES, BOUNDARY_NOTE } from '../state/boundaries';
-  import { VIEWS, clockUndefined } from '../state/schema';
+  import { VIEWS, clockUndefined, mixesPolarity } from '../state/schema';
   import { grid } from '../core/grid';
   import { cellAt, cellCenter, normalizedCoords } from '../core/geometry';
   import { shellCellAt } from '../core/shell';
@@ -65,6 +65,9 @@
       rMp: BOUNDARIES.rMp, rBs: BOUNDARIES.rBs,
     });
   });
+  $effect(() => { view?.setLines('flow', app.layers.includes('flow') ? stats.lines.flow : null); });
+  $effect(() => { view?.setLines('field', app.layers.includes('field') ? stats.lines.field : null); });
+  const linesOn = $derived(app.layers.includes('flow') || app.layers.includes('field'));
   $effect(() => {
     const d = display.shown, s = display.shell;
     if (view && d) view.setShell(s, d.range, d.lut);
@@ -121,12 +124,17 @@
     {#if dragging}<span class="tag">{dragging.plane} plane · {axisOf[dragging.plane]} = {dragging.offset.toFixed(2)} R<sub>E</sub></span>{/if}
     {#if stats.pending}<span class="tag muted">updating…</span>{/if}
     {#if stats.error}<span class="tag warn">{stats.error}</span>{/if}
+    {#if linesOn}<span class="tag muted">lines: k-NN 1/d mean, k = {app.k}, cap {app.cap} R<sub>E</sub> · vectors mapped to normalized space</span>{/if}
+    {#if app.layers.includes('field') && mixesPolarity(app.frame, app.clock)}<span class="tag warn">field lines average opposite IMF orientations</span>{/if}
+    {#if linesOn && stats.linesError}<span class="tag warn">lines: {stats.linesError}</span>{/if}
     <Inspector />
   </div>
   <div class="hud bottom">
     <div class="legend tag">
       <span><i style="background:#4FD1E8"></i>magnetopause</span>
       <span><i style="background:#F2A541"></i>bow shock</span>
+      {#if app.layers.includes('flow')}<span><i style="background:#7EE0C3"></i>flow lines (V)</span>{/if}
+      {#if app.layers.includes('field')}<span><i style="background:#C49BF2"></i>field lines (B)</span>{/if}
       {#if app.frame === 'PGSM_fold' && app.layers.includes('tint')}
         <span><i style="background:#E58467"></i>θ<sub>Bn</sub> &lt; 45° (Q∥)</span>
         <span><i style="background:#7FA0D0"></i>θ<sub>Bn</sub> &gt; 45° (Q⊥)</span>

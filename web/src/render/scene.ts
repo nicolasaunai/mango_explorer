@@ -8,6 +8,7 @@ import { graticule, revolutionGeometry, toThree, type RadiusFn } from './geometr
 import { PALETTE, boundaryMaterial, earthMaterial, label } from './materials';
 import { SliceLayer, normalOf, type Plane } from './slice';
 import { ShellSurface } from './shell';
+import { LinesLayer } from './lines';
 import type { ShellGrid } from '../core/shell';
 import { normalizedCoords } from '../core/geometry';
 import type { LutName } from './lut';
@@ -42,6 +43,8 @@ export class SceneView {
   private bsMat = boundaryMaterial(PALETTE.bs, 0.07, 0.6);
   private mpMat = boundaryMaterial(PALETTE.mp, 0.05, 0.55);
   private shell = new ShellSurface(120);
+  private flowLines = new LinesLayer(PALETTE.flow);
+  private fieldLines = new LinesLayer(PALETTE.field);
   private imf = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(21, 0, 0), 6.5, PALETTE.imf, 1.5, 0.8);
   private imfGhost = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(21, 0, 0), 6.5, PALETTE.imf, 1.5, 0.8);
   private zArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 7, PALETTE.fg, 1.2, 0.6);
@@ -76,6 +79,7 @@ export class SceneView {
       this.scene.add(s.mesh);
     }
     this.scene.add(this.shell.group);
+    this.scene.add(this.flowLines.group, this.fieldLines.group);
     this.scene.add(this.marker);
     this.marker.visible = false;
     this.listenForPicks();
@@ -186,6 +190,12 @@ export class SceneView {
   /** Colour the depth shell with its (theta, phi) grid. */
   setShell(grid: ShellGrid | null, range: [number, number], lut: LutName) {
     this.shell.setGrid(grid, range, lut);
+    this.requestRender();
+  }
+
+  /** Flow or field lines (physics coordinates), or null to hide them. */
+  setLines(kind: 'flow' | 'field', p: { points: Float32Array; offsets: Uint32Array } | null) {
+    (kind === 'flow' ? this.flowLines : this.fieldLines).set(p);
     this.requestRender();
   }
 

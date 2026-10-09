@@ -28,6 +28,7 @@ void main() {
 
 export const PALETTE = {
   mp: '#4FD1E8', bs: '#F2A541', qpar: '#E58467', qperp: '#7FA0D0', imf: '#E8C547',
+  flow: '#7EE0C3', field: '#C49BF2',
   fg: '#D7DEE6', muted: '#7C8A99', screen: '#0A0E13',
 };
 
