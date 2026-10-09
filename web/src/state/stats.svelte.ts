@@ -80,7 +80,7 @@ let shellWanted = NaN;
 
 /** k-NN statistics; debounced because each request searches every displayed node. */
 export function runKnn(frame: FrameName, quantity: QuantityName, stat: Stat, selection: Selection,
-  planes: Plane[], offsets: PlaneOffsets, k: number, cap: number, useNeff: boolean, shellD: number) {
+  planes: Plane[], offsets: PlaneOffsets, k: number, cap: number, useNeff: boolean, shellD: number, rotationDeg: number) {
   if (!worker) return;
   const snap = $state.snapshot(selection);
   stats.pending = true;
@@ -88,7 +88,7 @@ export function runKnn(frame: FrameName, quantity: QuantityName, stat: Stat, sel
   knnTimer = setTimeout(async () => {
     const id = (latestKnn = nextId);
     shellWanted = shellD;
-    const r = await send({ type: 'knn', frame, quantity, stat, selection: snap, planes: [...planes], offsets: { ...offsets }, k, cap, useNeff, shellD });
+    const r = await send({ type: 'knn', frame, quantity, stat, selection: snap, planes: [...planes], offsets: { ...offsets }, k, cap, useNeff, shellD, rotationDeg });
     if (id !== latestKnn) return;
     stats.pending = false;
     if (r.type === 'knn') {

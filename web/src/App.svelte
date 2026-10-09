@@ -5,6 +5,7 @@
   import Viewport from './ui/Viewport.svelte';
   import { app, patch, syncHash } from './state/app.svelte';
   import { data, loadAtlas, selectionOf } from './state/data.svelte';
+  import { rotationOf } from './state/imf';
   import { hasVectors } from './core/atlas';
   import { cancelLines, runKnn, runKnnShell, runLines, runQuery } from './state/stats.svelte';
   import Colorbar from './ui/Colorbar.svelte';
@@ -18,12 +19,12 @@
   // Re-run the statistics whenever anything they depend on changes; the worker answers the latest.
   $effect(() => {
     if (data.status !== 'ready' || app.source !== 'bins') return;
-    runQuery(app.frame, app.quantity, app.stat, selectionOf(app), app.neff);
+    runQuery(app.frame, app.quantity, app.stat, selectionOf(app.frame, app), app.neff);
   });
   $effect(() => {
     if (data.status !== 'ready' || app.source !== 'knn') return;
-    runKnn(app.frame, app.quantity, app.stat, selectionOf(app), app.planes, app.offsets, app.k, app.cap, app.neff,
-      untrack(() => app.depth));
+    runKnn(app.frame, app.quantity, app.stat, selectionOf(app.frame, app), app.planes, app.offsets, app.k, app.cap, app.neff,
+      untrack(() => app.depth), rotationOf(app));
   });
   // moving the depth re-evaluates only the shell, not the planes (the full k-NN query covers the first shell)
   let lastDepth = app.depth;
@@ -32,7 +33,7 @@
     if (d === lastDepth) return;
     lastDepth = d;
     if (data.status !== 'ready' || app.source !== 'knn') return;
-    untrack(() => runKnnShell(app.frame, app.quantity, app.stat, selectionOf(app), app.k, app.cap, app.neff, d));
+    untrack(() => runKnnShell(app.frame, app.quantity, app.stat, selectionOf(app.frame, app), app.k, app.cap, app.neff, d));
   });
   // lines need an atlas with vector sums; each kind re-traces only when its own layer or parameters change
   const vectors = $derived(data.status === 'ready' && hasVectors(data.manifest));
@@ -40,15 +41,15 @@
   const fieldOn = $derived(vectors && app.layers.includes('field'));
   $effect(() => {
     if (!flowOn) { untrack(() => cancelLines('flow')); return; }
-    runLines('flow', app.frame, selectionOf(app), app.k, app.cap, app.density, 0);
+    runLines('flow', app.frame, selectionOf(app.frame, app), app.k, app.cap, app.density, 0);
   });
   $effect(() => {
     if (!fieldOn) { untrack(() => cancelLines('field')); return; }
-    runLines('field', app.frame, selectionOf(app), app.k, app.cap, app.density, app.depth);
+    runLines('field', app.frame, selectionOf(app.frame, app), app.k, app.cap, app.density, app.depth);
   });
   $effect(() => {
     if (data.status !== 'ready' || !app.pinA || app.source !== 'bins') return;
-    runQuery(app.frame, app.quantity, app.stat, selectionOf(app.pinA), app.neff, 'A');
+    runQuery(app.frame, app.quantity, app.stat, selectionOf(app.frame, app.pinA), app.neff, 'A');
   });
 
   let tab = $state<'cond' | 'qty' | 'views'>('cond');

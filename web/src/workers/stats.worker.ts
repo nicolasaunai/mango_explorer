@@ -1,6 +1,7 @@
 // Sums the selected condition bins of a cube and reduces them to per-cell statistics.
 import { CubeView, SampleTable, httpFetcher, loadManifest, type FetchBytes, type Manifest, type QueryResult, type Selection } from '../core/atlas';
 import { buildSamples, knnField, knnNode, voxelField, voxelNode, type KnnSamples } from '../core/knnField';
+import { unrotateClock } from '../core/frames';
 import { shellField } from '../core/shell';
 import { VoxelFrame, voxelKnnAt, type VoxelSet } from '../core/voxels';
 import { isVoxelStat } from '../core/compute';
@@ -17,14 +18,18 @@ let manifest: Manifest;
 const cubes = new Map<FrameName, Promise<CubeView>>();
 let last: { quantity: QuantityName; res: QueryResult; frame: FrameName; selection: Selection } | null = null;
 
-let samples: Promise<SampleTable> | null = null;
+const samples = new Map<FrameName, Promise<SampleTable>>();
+const sampleTable = (frame: FrameName) => {
+  if (!samples.has(frame)) samples.set(frame, SampleTable.load(manifest, frame, fetchBytes));
+  return samples.get(frame)!;
+};
 const voxelFrames = new Map<string, Promise<VoxelFrame>>();
 let voxCache: { key: string; v: VoxelSet; k: number; cap: number; weighted: boolean } | null = null;
-let knnCache: { key: string; s: KnnSamples; k: number; kSearched: number; cap: number } | null = null;
+let knnCache: { key: string; s: KnnSamples; k: number; kSearched: number; cap: number; fraction: number } | null = null;
 
 /** k is given in neighbours of the full dataset; the browser holds a random fraction of it, so the
  * same neighbourhood holds about k x fraction of its samples. */
-const searchedK = (k: number) => Math.max(1, Math.round(k * (manifest.samples?.fraction ?? 1)));
+const searchedK = (k: number, fraction: number) => Math.max(1, Math.round(k * fraction));
 const KNN = grid.raw.knn;
 
 const post = (msg: StatsReply, transfer: Transferable[] = []) => (self as unknown as Worker).postMessage(msg, transfer);
@@ -54,14 +59,13 @@ async function voxelsFor(m: KnnParams) {
 /** Indexed sample positions of the selection (k-NN quantiles), cached for the probe. */
 async function samplesFor(m: KnnParams) {
   voxCache = null;
-  samples ??= SampleTable.load(manifest, fetchBytes);
-  const table = await samples;
+  const table = await sampleTable(m.frame);
   const key = JSON.stringify([m.frame, m.quantity, m.selection, m.cap]);
   if (knnCache?.key !== key) {
     const values = await table.quantity(m.quantity);
-    knnCache = { key, s: buildSamples(table, values, m.frame, m.selection, m.cap), k: m.k, kSearched: 0, cap: m.cap };
+    knnCache = { key, s: buildSamples(table, values, m.selection, m.cap), k: m.k, kSearched: 0, cap: m.cap, fraction: table.fraction };
   }
-  knnCache.k = m.k; knnCache.kSearched = searchedK(m.k);
+  knnCache.k = m.k; knnCache.kSearched = searchedK(m.k, knnCache.fraction);
   return knnCache;
 }
 
@@ -88,8 +92,9 @@ self.onmessage = async (e: MessageEvent<StatsRequest>) => {
       // full data: k-NN means from the voxel sums
       const t0 = performance.now();
       const vc = await voxelsFor(m);
+      const toAtlas = (p: [number, number, number]) => unrotateClock(p, m.rotationDeg);
       const f = voxelField(vc.v, m.quantity, m.stat, m.planes, DISPLAY_BOUNDARIES,
-        { k: m.k, cap: m.cap, factor: KNN.search_factor }, undefined, m.offsets, m.shellD);
+        { k: m.k, cap: m.cap, factor: KNN.search_factor }, undefined, m.offsets, m.shellD, toAtlas);
       const all = new Float32Array([...f.fields.flatMap((p) => [...p.values]), ...f.shellValues]);
       const flags = new Uint8Array([...f.fields.flatMap((p) => [...p.flags]), ...f.shellFlags]);
       post({
@@ -104,23 +109,27 @@ self.onmessage = async (e: MessageEvent<StatsRequest>) => {
       const kc = await samplesFor(m);
       const kSearched = kc.kSearched;
       const opts = { k: kSearched, cap: m.cap, factor: KNN.search_factor, minNeff: KNN.min_neff, useNeff: m.useNeff };
-      const f = knnField(kc.s, m.quantity, m.stat, m.planes, DISPLAY_BOUNDARIES, opts, undefined, m.offsets, m.shellD);
+      const toAtlas = (p: [number, number, number]) => unrotateClock(p, m.rotationDeg);
+      const f = knnField(kc.s, m.quantity, m.stat, m.planes, DISPLAY_BOUNDARIES, opts, undefined, m.offsets, m.shellD, toAtlas);
       const all = new Float32Array([...f.fields.flatMap((p) => [...p.values]), ...f.shellValues]);
       const flags = new Uint8Array([...f.fields.flatMap((p) => [...p.flags]), ...f.shellFlags]);
       post({
         type: 'knn', id: m.id, frame: m.frame, quantity: m.quantity, stat: m.stat,
         fields: f.fields, shellValues: f.shellValues, shellFlags: f.shellFlags, shell: f.shell, shellD: m.shellD,
         profile: f.profile, range: range2(all, flags), nSamples: kc.s.n, ms: performance.now() - t0,
-        k: m.k, kSearched, fraction: manifest.samples?.fraction ?? 1,
+        k: m.k, kSearched, fraction: kc.fraction,
       }, [...f.fields.flatMap((p) => [p.values.buffer, p.flags.buffer]), f.shellValues.buffer, f.shellFlags.buffer,
         f.shell.values.buffer, f.shell.flags.buffer]);
     } else if (m.type === 'knnShell') {
       // only the shell moved: evaluate it alone with the cached samples
       const t0 = performance.now();
-      const node = isVoxelStat(m.stat)
-        ? voxelNode((await voxelsFor(m)).v, m.quantity, m.stat, { k: m.k, cap: m.cap, factor: KNN.search_factor })
-        : knnNode((await samplesFor(m)).s, m.quantity, m.stat,
-          { k: searchedK(m.k), cap: m.cap, factor: KNN.search_factor, minNeff: KNN.min_neff, useNeff: m.useNeff });
+      let node;
+      if (isVoxelStat(m.stat)) node = voxelNode((await voxelsFor(m)).v, m.quantity, m.stat, { k: m.k, cap: m.cap, factor: KNN.search_factor });
+      else {
+        const kc = await samplesFor(m);
+        node = knnNode(kc.s, m.quantity, m.stat,
+          { k: searchedK(m.k, kc.fraction), cap: m.cap, factor: KNN.search_factor, minNeff: KNN.min_neff, useNeff: m.useNeff });
+      }
       const shell = shellField(node, m.shellD, DISPLAY_BOUNDARIES);
       post({ type: 'knnShell', id: m.id, shell, shellD: m.shellD, ms: performance.now() - t0 },
         [shell.values.buffer, shell.flags.buffer]);
