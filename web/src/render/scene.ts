@@ -1,12 +1,14 @@
-// The 3D view: Earth, axes, magnetopause and bow shock, IMF and Z_GSM arrows.
+// The 3D view: Earth, fixed axes labelled by frame, magnetopause and bow shock, IMF arrows.
+// In PGSM the data (slices, shell, lines) rotate rigidly about X with the target clock; the axes do not.
 // Renders on demand: only when the camera moves or the inputs change.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { FrameName } from '../core/grid';
-import { imfDirection, zGsmDirection } from '../core/frames';
+import { imfDirection } from '../core/frames';
 import { graticule, revolutionGeometry, toThree, type RadiusFn } from './geometry';
 import { PALETTE, boundaryMaterial, earthMaterial, label } from './materials';
 import { SliceLayer, normalOf, type Plane } from './slice';
+import { clockRotationX } from './rotation';
 import { ShellSurface } from './shell';
 import { LinesLayer } from './lines';
 import type { ShellGrid } from '../core/shell';
@@ -15,8 +17,12 @@ import type { LutName } from './lut';
 
 export type SceneInputs = {
   frame: FrameName;
-  clockDeg: number | null; // representative clock angle, null when undefined (radial IMF)
-  coneDeg: number;
+  /** clock angle of the drawn IMF arrow, null when it has no direction */
+  imfClockDeg: number | null;
+  /** cone of the IMF arrow, and of a fainter second arrow (180° − cone) when the selection spans 90° */
+  imfCone: { cone: number; ghost: number | null };
+  /** rotation (degrees) from the atlas to the display: the data rotate about X, the axes stay */
+  rotationDeg: number;
   showMp: boolean;
   showBs: boolean;
   tint: boolean;
@@ -24,8 +30,6 @@ export type SceneInputs = {
   shells: boolean;
   /** its depth D_msh */
   shellD: number;
-  /** draw where Z_GSM (the dipole axis) points for the selected clock sector; off by default */
-  zgsm: boolean;
   rMp: RadiusFn;
   rBs: RadiusFn;
 };
@@ -47,8 +51,9 @@ export class SceneView {
   private fieldLines = new LinesLayer(PALETTE.field);
   private imf = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(21, 0, 0), 6.5, PALETTE.imf, 1.5, 0.8);
   private imfGhost = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(21, 0, 0), 6.5, PALETTE.imf, 1.5, 0.8);
-  private zArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 7, PALETTE.fg, 1.2, 0.6);
   private labels: Record<string, THREE.Sprite> = {};
+  /** slices, depth shell and lines: drawn in atlas coordinates, rotated to the display */
+  private rotating = new THREE.Group();
   private ro: ResizeObserver;
   private frameRequested = false;
   private lastShape?: [RadiusFn, RadiusFn];
@@ -78,8 +83,8 @@ export class SceneView {
       s.setPlane(plane);
       this.scene.add(s.mesh);
     }
-    this.scene.add(this.shell.group);
-    this.scene.add(this.flowLines.group, this.fieldLines.group);
+    this.rotating.add(this.shell.group, this.flowLines.group, this.fieldLines.group);
+    this.scene.add(this.rotating);
     this.scene.add(this.marker);
     this.marker.visible = false;
     this.listenForPicks();
@@ -244,19 +249,14 @@ export class SceneView {
       new THREE.Vector3(0, -15, 0), new THREE.Vector3(0, 17, 0),
     ]);
     s.add(new THREE.LineSegments(axes, axMat));
-    this.labels.x = label('+X  Sun', PALETTE.fg, 1.3); this.labels.x.position.set(28, 0, 0);
-    this.labels.y = label('+Y  dusk', PALETTE.fg, 1.3); this.labels.y.position.set(0, 0, -18);
     this.labels.imf = label('IMF', PALETTE.imf, 1.3);
-    this.labels.zgsm = label('Z_GSM', PALETTE.fg, 1.1);
     this.labels.qpar = label('Q∥', PALETTE.qpar, 1.5);
     this.labels.qperp = label('Q⊥', PALETTE.qperp, 1.5);
     Object.values(this.labels).forEach((l) => s.add(l));
     this.imfGhost.line.material = new THREE.LineBasicMaterial({ color: PALETTE.imf, transparent: true, opacity: 0.35 });
     (this.imfGhost.cone.material as THREE.MeshBasicMaterial).transparent = true;
     (this.imfGhost.cone.material as THREE.MeshBasicMaterial).opacity = 0.35;
-    (this.zArrow.line.material as THREE.LineBasicMaterial).transparent = true;
-    (this.zArrow.line.material as THREE.LineBasicMaterial).opacity = 0.6;
-    s.add(this.imf, this.imfGhost, this.zArrow);
+    s.add(this.imf, this.imfGhost);
   }
 
   private shellD = NaN;
@@ -266,16 +266,18 @@ export class SceneView {
     this.shellD = dMsh;
   }
 
-  private zLabel?: THREE.Sprite;
-  private setZLabel(frame: FrameName) {
-    if (this.zLabel) {
-      this.scene.remove(this.zLabel);
-      this.zLabel.material.map?.dispose();
-      this.zLabel.material.dispose();
-    }
-    this.zLabel = label(frame === 'GSM' ? '+Z GSM' : '+Z PGSM (IMF⊥)', PALETTE.fg, 1.3);
-    this.zLabel.position.set(0, 18.5, 0);
-    this.scene.add(this.zLabel);
+  private axisLabels: THREE.Sprite[] = [];
+  private axisFrame = '';
+  private setAxisLabels(frame: FrameName) {
+    if (frame === this.axisFrame) return;
+    this.axisFrame = frame;
+    for (const l of this.axisLabels) { this.scene.remove(l); l.material.map?.dispose(); l.material.dispose(); }
+    const make = (text: string, x: number, y: number, z: number) => { const l = label(text, PALETTE.fg, 1.3); l.position.set(x, y, z); this.scene.add(l); return l; };
+    this.axisLabels = [
+      make(`+X ${frame} · Sun`, 28, 0, 0),
+      make(frame === 'GSM' ? '+Y GSM · dusk' : '+Y PGSM', 0, 0, -18),
+      make(`+Z ${frame}`, 0, 18.5, 0),
+    ];
   }
 
   private buildBoundaries(rMp: RadiusFn, rBs: RadiusFn) {
@@ -304,30 +306,23 @@ export class SceneView {
       this.lastShape = [p.rMp, p.rBs];
       this.shellD = NaN;  // the shell sits between the boundaries: rebuild it too
     }
-    this.setZLabel(p.frame);
+    this.setAxisLabels(p.frame);
     this.mp!.visible = p.showMp;
     this.bs!.visible = p.showBs;
     if (p.shells && p.shellD !== this.shellD) this.buildShell(p.shellD);
     this.shell.group.visible = p.shells;
 
-    const clock = p.clockDeg ?? 0;
-    const b = toThree(imfDirection(p.frame, clock, p.coneDeg, 1)).normalize();
-    const bNeg = toThree(imfDirection(p.frame, clock, p.coneDeg, -1)).normalize();
-    // A folded frame has one IMF orientation; the others mix both signs of Bx.
-    const unique = p.frame === 'PGSM_fold';
-    const showClock = p.clockDeg !== null || p.frame !== 'GSM';
-    this.imf.visible = showClock;
+    this.rotating.rotation.x = clockRotationX(p.rotationDeg);
+    for (const s of Object.values(this.slices)) s.setClock(p.rotationDeg);
+    // the IMF arrows, the tint and the Q∥/Q⊥ labels are not in `rotating`: already in display coordinates
+    const show = p.imfClockDeg !== null;
+    const b = toThree(imfDirection(p.imfClockDeg ?? 0, p.imfCone.cone)).normalize();
+    this.imf.visible = this.labels.imf.visible = show;
     this.imf.setDirection(b);
-    this.imfGhost.visible = showClock && !unique;
-    this.imfGhost.setDirection(bNeg);
-    this.labels.imf.visible = showClock;
+    this.imfGhost.visible = show && p.imfCone.ghost !== null;
+    if (p.imfCone.ghost !== null) this.imfGhost.setDirection(toThree(imfDirection(p.imfClockDeg ?? 0, p.imfCone.ghost)).normalize());
     this.labels.imf.position.copy(new THREE.Vector3(21, 0, 0).add(b.clone().multiplyScalar(8.4)));
-
-    const z = !p.zgsm || p.frame === 'GSM' || p.clockDeg === null ? null : toThree(zGsmDirection(p.frame, clock, 1)).normalize();
-    this.zArrow.visible = this.labels.zgsm.visible = !!z;
-    if (z) { this.zArrow.setDirection(z); this.labels.zgsm.position.copy(z.multiplyScalar(9)); }
-
-    const tint = p.tint && unique;
+    const tint = p.tint && show;
     this.bsMat.uniforms.uTint.value = tint ? 1 : 0;
     this.bsMat.uniforms.uB.value.copy(b);
     this.labels.qpar.visible = this.labels.qperp.visible = tint && p.showBs;

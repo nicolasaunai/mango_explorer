@@ -32,6 +32,7 @@ uniform int uMode;           // 0: grid cells, 1: field on the plane (k-NN)
 uniform sampler2D uField;    // r = value, g = flag, over [-uHalf, uHalf]^2 in plane coordinates
 uniform float uHalf;
 uniform int uPlane;          // 0: XZ, 1: XY, 2: YZ (physics axes of the plane's u, v)
+uniform float uClock;        // rotation (degrees) from the atlas to the display
 in vec3 vW;
 out vec4 fragColor;
 void main() {
@@ -41,7 +42,7 @@ void main() {
   float th = degrees(acos(clamp(P.x / r, -1.0, 1.0)));
   float thMax = uStep.y * float(uShape.y);
   if (th >= thMax) discard;
-  float ph = mod(degrees(atan(P.z, P.y)), 360.0);
+  float ph = mod(degrees(atan(P.z, P.y)) + uClock, 360.0);   // atlas azimuth (display + rotation)
   vec2 b = texelFetch(uBounds, ivec2(int(th / 180.0 * ${N_BOUNDS - 1}.0 + 0.5), 0), 0).rg;
   float D = (r - b.r) / (b.g - b.r);
   if (D < 0.0 || D > 1.0) discard;
@@ -100,7 +101,7 @@ export class SliceLayer {
         uStep: { value: new THREE.Vector3(grid.phiEdges[1] - grid.phiEdges[0], grid.thetaEdges[1] - grid.thetaEdges[0], grid.dEdges[1] - grid.dEdges[0]) },
         uShape: { value: new Int32Array([nphi, nt, nd]) },
         uOpacity: { value: 0.94 }, uHatch: { value: new THREE.Color('#3A4655') },
-        uMode: { value: 0 }, uField: { value: null }, uHalf: { value: 32 }, uPlane: { value: 0 },
+        uMode: { value: 0 }, uField: { value: null }, uHalf: { value: 32 }, uPlane: { value: 0 }, uClock: { value: 0 },
       },
     });
     this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), this.material);
@@ -150,6 +151,9 @@ export class SliceLayer {
     this.material.uniforms.uMode.value = 0;
   }
 
+  /** Rotation (degrees) from the atlas to the display: bins are looked up in atlas coordinates. */
+  setClock(rotationDeg: number) { this.material.uniforms.uClock.value = rotationDeg; }
+
   setRange(lo: number, hi: number) {
     this.material.uniforms.uRange.value.set(lo, hi === lo ? lo + 1 : hi);
   }
@@ -159,7 +163,7 @@ export class SliceLayer {
     this.material.uniforms.uLut.value = lutTexture(name);
   }
 
-  /** Orient the plane: XZ is the noon-midnight meridian (contains the IMF in PGSM). */
+  /** Orient the plane: XZ is the noon-midnight meridian (contains the IMF in PGSM at clock 0). */
   setPlane(plane: Plane) {
     this.plane = plane;
     this.material.uniforms.uPlane.value = plane === 'XZ' ? 0 : plane === 'XY' ? 1 : 2;

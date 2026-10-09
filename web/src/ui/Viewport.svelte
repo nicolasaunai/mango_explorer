@@ -2,13 +2,14 @@
   import { onMount } from 'svelte';
   import { SceneView, type CameraPreset } from '../render/scene';
   import { app, patch } from '../state/app.svelte';
-  import { data } from '../state/data.svelte';
+  import { data, selectionOf } from '../state/data.svelte';
   import { hasVectors } from '../core/atlas';
   import { probe, probeKnn, stats } from '../state/stats.svelte';
   import { BOUNDARIES, BOUNDARY_NOTE } from '../state/boundaries';
-  import { VIEWS, clockUndefined, mixesPolarity } from '../state/schema';
-  import { grid } from '../core/grid';
-  import { cellAt, cellCenter, normalizedCoords } from '../core/geometry';
+  import { VIEWS } from '../state/schema';
+  import { imfClockOf, mixesPolarity, representativeCone, rotationOf, tintAvailable } from '../state/imf';
+  import { rotateClock, unrotateClock } from '../core/frames';
+  import { cellAtDisplay, cellCenter, normalizedCoords } from '../core/geometry';
   import { shellCellAt } from '../core/shell';
   import Inspector from './Inspector.svelte';
   import { display } from '../state/display.svelte';
@@ -21,25 +22,17 @@
   let dragging = $state<{ plane: string; offset: number } | null>(null);
   const axisOf: Record<string, string> = { XY: 'Z', XZ: 'Y', YZ: 'X' };
 
-  /** Circular mean of the selected 30° sectors; null when it carries no direction. */
-  function representativeClock(sectors: number[]): number | null {
-    if (sectors.length === 12 || clockUndefined(app.cone)) return null;
-    let x = 0, y = 0;
-    for (const k of sectors) { const a = ((k + 0.5) * 30 * Math.PI) / 180; x += Math.sin(a); y += Math.cos(a); }
-    if (Math.hypot(x, y) / sectors.length < 0.2) return null;
-    return ((Math.atan2(x, y) * 180) / Math.PI + 360) % 360;
-  }
-  const coneEdges = grid.conditionEdges('cone_deg');
-  const representativeCone = (bins: number[]) =>
-    bins.reduce((s, b) => s + (coneEdges[b] + coneEdges[b + 1]) / 2, 0) / bins.length;
+  const rot = $derived(rotationOf(app));
 
   onMount(() => {
     try {
       view = new SceneView(canvas);
       view.onPick = (p, onShell) => {
-        // on the shell, the depth is the shell's (the clicked point sits on a chord of the curved surface)
-        const n = normalizedCoords(p, BOUNDARIES);
-        patch({ probe: (onShell ? shellCellAt(app.depth, n.thetaDeg, n.phiDeg) : cellAt(p, BOUNDARIES)) ?? -1 });
+        // p is displayed; cells are atlas cells. On the shell, the depth is the shell's (the clicked
+        // point sits on a chord of the curved surface).
+        const pa = unrotateClock(p, rotationOf(app));
+        const n = normalizedCoords(pa, BOUNDARIES);
+        patch({ probe: (onShell ? shellCellAt(app.depth, n.thetaDeg, n.phiDeg) : cellAtDisplay(p, BOUNDARIES, rotationOf(app))) ?? -1 });
       };
       view.onPlaneDrag = (plane, offset, done) => {
         dragging = done ? null : { plane, offset };
@@ -54,16 +47,10 @@
 
   $effect(() => {
     view?.update({
-      frame: app.frame,
-      clockDeg: representativeClock(app.clock),
-      coneDeg: representativeCone(app.cone),
-      showMp: app.layers.includes('mp'),
-      showBs: app.layers.includes('bs'),
-      tint: app.layers.includes('tint'),
-      shells: app.layers.includes('shells'),
-      shellD: app.depth,
-      zgsm: app.layers.includes('zgsm'),
-      rMp: BOUNDARIES.rMp, rBs: BOUNDARIES.rBs,
+      frame: app.frame, imfClockDeg: imfClockOf(app), imfCone: representativeCone(app.cone), rotationDeg: rot,
+      showMp: app.layers.includes('mp'), showBs: app.layers.includes('bs'),
+      tint: app.layers.includes('tint') && tintAvailable(app.frame, app.clock, app.cone),
+      shells: app.layers.includes('shells'), shellD: app.depth, rMp: BOUNDARIES.rMp, rBs: BOUNDARIES.rBs,
     });
   });
   // a layer in the URL is ignored when the atlas has no vector sums (its toggle is disabled)
@@ -91,7 +78,8 @@
   $effect(() => {
     const cell = app.probe;
     const center = cell >= 0 ? cellCenter(cell, BOUNDARIES) : null;
-    view?.setMarker(center);
+    // the marker is drawn displayed; the k-NN probe gets the atlas centre (its samples are in atlas coordinates)
+    view?.setMarker(center ? rotateClock(center, rot) : null);
     if (app.source === 'knn') { if (stats.knn) probeKnn(center, cell); }
     else if (stats.result) probe(cell >= 0 ? cell : null);
   });
@@ -100,7 +88,7 @@
   function savePng() {
     const d = display.shown;
     if (!view || !d) return;
-    const totals = data.hours?.counts({ clock_deg: app.clock, cone_deg: app.cone, Ma_sw: app.ma });
+    const totals = data.hours[app.frame]?.counts(selectionOf(app.frame, app));
     const tmp = document.createElement('div');
     tmp.innerHTML = quantityTitle(app.quantity, app.stat);
     exportPng(view, {
@@ -111,7 +99,7 @@
       lut: d.lut, range: d.range, log: d.log,
     });
   }
-  const frameLabel = $derived(app.frame === 'PGSM_fold' ? 'PGSM · IMF polarity folded' : app.frame);
+  const frameLabel = $derived(app.frame === 'PGSM' ? `PGSM · clock ${app.clockDeg}°` : 'GSM');
 </script>
 
 <div class="stage">
@@ -134,7 +122,7 @@
     {#if stats.error}<span class="tag warn">{stats.error}</span>{/if}
     {#if linesUpdating}<span class="tag muted">lines updating…</span>{/if}
     {#if linesOn}<span class="tag muted">lines: k-NN 1/d mean, k = {app.k}, cap {app.cap} R<sub>E</sub> · vectors mapped to normalized space</span>{/if}
-    {#if fieldOn && mixesPolarity(app.frame, app.clock)}<span class="tag warn">field lines average opposite IMF orientations</span>{/if}
+    {#if fieldOn && mixesPolarity(app.frame, app.clock, app.cone)}<span class="tag warn">field lines average opposite IMF orientations</span>{/if}
     {#if linesOn && stats.linesError}<span class="tag warn">lines: {stats.linesError}</span>{/if}
     <Inspector />
   </div>
@@ -144,7 +132,7 @@
       <span><i style="background:#F2A541"></i>bow shock</span>
       {#if flowOn}<span><i style="background:#7EE0C3"></i>flow lines (V)</span>{/if}
       {#if fieldOn}<span><i style="background:#C49BF2"></i>field lines (B)</span>{/if}
-      {#if app.frame === 'PGSM_fold' && app.layers.includes('tint')}
+      {#if app.layers.includes('tint') && tintAvailable(app.frame, app.clock, app.cone)}
         <span><i style="background:#E58467"></i>θ<sub>Bn</sub> &lt; 45° (Q∥)</span>
         <span><i style="background:#7FA0D0"></i>θ<sub>Bn</sub> &gt; 45° (Q⊥)</span>
       {/if}
