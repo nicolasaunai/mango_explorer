@@ -5,6 +5,8 @@ import time
 from collections import Counter
 from pathlib import Path
 
+import numpy as np
+
 from mango_explorer.atlas.cube import CubeAccumulator
 from mango_explorer.atlas.grid import Grid
 from mango_explorer.atlas.hours import HourAccumulator
@@ -30,6 +32,9 @@ def build_atlas(chunks, grid: Grid, out_dir: Path, *, frames=None, cube_ids=None
         stats["rows_in"] += prep.n_in
         stats["rows_kept"] += prep.n_kept
         stats.update({f"dropped_{k}": v for k, v in prep.dropped.items()})
+        # rows whose mapped V and B are both finite (they need R_mp and R_bs): the flow/field line sums
+        stats["rows_with_vectors"] += 0 if prep.vectors is None else int(
+            np.all([np.isfinite(v).all(axis=1) for v in prep.vectors.values()], axis=0).sum())
         for acc in accs:
             acc.add(prep)
         hours.add(prep)
@@ -37,6 +42,9 @@ def build_atlas(chunks, grid: Grid, out_dir: Path, *, frames=None, cube_ids=None
         for v in voxels:
             v.add(prep)
         log(f"  {stats['rows_in']:>12,} rows  {time.perf_counter() - t0:7.1f} s")
+    if stats["rows_with_vectors"] < 0.9 * stats["rows_kept"]:
+        log(f"  WARNING: only {stats['rows_with_vectors']:,} of {stats['rows_kept']:,} kept rows have finite "
+            "V and B mapped to normalized space (rows_with_vectors < 90 %): check R_mp / R_bs")
     cubes = [a.finalize() for a in accs]
     manifest = write_atlas(out_dir, grid, cubes, hours.finalize(), {
         "source": source or {}, "stats": dict(stats),

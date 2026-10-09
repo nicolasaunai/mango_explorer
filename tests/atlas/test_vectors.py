@@ -83,3 +83,28 @@ def test_normalized_vectors_without_boundary_columns_are_nan():
     cols |= {"X_gsm_norm": np.full(3, 12.0), "Y_gsm_norm": np.zeros(3), "Z_gsm_norm": np.zeros(3)}
     out = normalized_vectors(cols, G)
     assert set(out) == {"V_vec", "B_vec"} and np.all(np.isnan(out["V_vec"]))
+
+
+def test_build_counts_rows_with_vectors_and_warns_when_few(tmp_path):
+    import polars as pl
+
+    from mango_explorer.atlas.pipeline import build_atlas
+    from mango_explorer.atlas.prepare import prepare
+    from mango_explorer.atlas.sources import columns_from_polars, iter_polars
+    from mango_explorer.atlas.store import read_atlas
+    from mango_explorer.atlas.synthetic import synthetic_magnetosheath
+
+    df = synthetic_magnetosheath(20_000, seed=5)
+    for frac, warned in ((0.0, False), (0.2, True)):
+        r_mp = df["R_mp"].to_numpy().copy()
+        r_mp[np.random.default_rng(6).random(len(r_mp)) < frac] = np.nan
+        d = df.with_columns(pl.Series("R_mp", r_mp))
+        prep = prepare(columns_from_polars(d), G)
+        want = int(np.all([np.isfinite(v).all(axis=1) for v in prep.vectors.values()], axis=0).sum())
+        lines = []
+        out = tmp_path / f"f{frac}"
+        build_atlas(iter_polars(d, 7_000), G, out, frames=["PGSM"], log=lines.append)
+        stats = read_atlas(out)[0]["stats"]
+        assert stats["rows_with_vectors"] == want
+        assert (want < stats["rows_kept"]) == (frac > 0)
+        assert any("rows_with_vectors" in str(m) for m in lines) == warned

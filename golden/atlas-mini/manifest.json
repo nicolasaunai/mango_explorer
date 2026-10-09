@@ -9,7 +9,8 @@
   "rows_in": 29520,
   "rows_kept": 29432,
   "dropped_row_filter": 88,
-  "dropped_outside_shell_or_theta": 2824
+  "dropped_outside_shell_or_theta": 2824,
+  "rows_with_vectors": 29432
  },
  "build_seconds": 0.1,
  "hours": {
