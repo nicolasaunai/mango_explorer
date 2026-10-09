@@ -5,7 +5,6 @@ Needs space_mango >= 0.3 with the computed PGSM columns. Run from the repo root:
 """
 from __future__ import annotations
 
-import importlib.metadata
 import json
 from pathlib import Path
 
@@ -13,6 +12,7 @@ import space_mango as sm
 
 from mango_explorer.atlas.columns import mango_request
 from mango_explorer.atlas.grid import load_grid
+from mango_explorer.atlas.provenance import space_mango_provenance
 
 OUT = Path(__file__).resolve().parents[1] / "tests" / "data" / "mango"
 WINDOW = {"spacecraft": "C1", "start": "2005-01-03", "stop": "2005-01-04"}
@@ -29,7 +29,7 @@ def main() -> None:
     sm.get_data("magnetosheath", **(mango_request("PGSM", g) | {"clock": 37.5}), **WINDOW) \
         .to_polars().write_parquet(OUT / "PGSM_clock37.5.parquet")
     (OUT / "versions.json").write_text(json.dumps({
-        "space_mango": importlib.metadata.version("space-mango"),
+        "space_mango": space_mango_provenance(),
         "dataset": sm.dataset_info()["version"], "window": WINDOW}, indent=1))
 
 

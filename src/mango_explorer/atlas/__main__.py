@@ -40,15 +40,14 @@ def main(argv=None) -> None:
     grid = load_grid(args.grid)
     frames = tuple(args.frames or grid.frames)
     if args.mango_api:
-        import importlib.metadata
-
         import space_mango as sm
 
         from mango_explorer.atlas.columns import mango_request
+        from mango_explorer.atlas.provenance import space_mango_provenance
 
         streams = {f: sources.iter_mango_api(f, grid, args.spacecraft, args.years) for f in frames}
         info = sm.dataset_info()
-        source = {"kind": "mango-api", "space_mango": importlib.metadata.version("space-mango"),
+        source = {"kind": "mango-api", "space_mango": space_mango_provenance(),
                   "dataset_version": info["version"], "citation": info.get("citation"),
                   "requests": {f: mango_request(f, grid) for f in frames},
                   "spacecraft": args.spacecraft or "all", "years": args.years or "all"}
