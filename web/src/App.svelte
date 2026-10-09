@@ -5,7 +5,7 @@
   import Viewport from './ui/Viewport.svelte';
   import { app, patch, syncHash } from './state/app.svelte';
   import { data, loadAtlas, selectionOf } from './state/data.svelte';
-  import { runKnn, runKnnShell, runQuery } from './state/stats.svelte';
+  import { runKnn, runKnnShell, runLines, runQuery } from './state/stats.svelte';
   import Colorbar from './ui/Colorbar.svelte';
   import ThetaPhiMap from './ui/ThetaPhiMap.svelte';
   import DepthProfile from './ui/DepthProfile.svelte';
@@ -32,6 +32,14 @@
     lastDepth = d;
     if (data.status !== 'ready' || app.source !== 'knn') return;
     untrack(() => runKnnShell(app.frame, app.quantity, app.stat, selectionOf(app), app.k, app.cap, app.neff, d));
+  });
+  $effect(() => {
+    if (data.status !== 'ready' || !app.layers.includes('flow')) return;
+    runLines('flow', app.frame, selectionOf(app), app.k, app.cap, app.density, 0);
+  });
+  $effect(() => {
+    if (data.status !== 'ready' || !app.layers.includes('field')) return;
+    runLines('field', app.frame, selectionOf(app), app.k, app.cap, app.density, app.depth);
   });
   $effect(() => {
     if (data.status !== 'ready' || !app.pinA || app.source !== 'bins') return;

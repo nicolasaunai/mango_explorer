@@ -2,7 +2,8 @@
 import { CubeView, SampleTable, httpFetcher, loadManifest, type FetchBytes, type Manifest, type QueryResult, type Selection } from '../core/atlas';
 import { buildSamples, knnField, knnNode, voxelField, voxelNode, type KnnSamples } from '../core/knnField';
 import { shellField } from '../core/shell';
-import { VoxelFrame, voxelKnnAt, type VoxelSet } from '../core/voxels';
+import { VoxelFrame, voxelKnnAt, voxelVectorAt, type VectorName, type VoxelSet } from '../core/voxels';
+import { LINE, fieldSeeds, flowSeeds, insideSheath, latticeField, pack, trace, traceBoth, type VectorField } from '../core/lines';
 import { isVoxelStat } from '../core/compute';
 import { DISPLAY_BOUNDARIES } from '../core/display';
 import { robustRange as range2 } from '../core/compute';
@@ -65,6 +66,21 @@ async function samplesFor(m: KnnParams) {
   return knnCache;
 }
 
+const vectorFields = new Map<string, { key: string; field: VectorField }>();
+
+/** The k-NN mean vector field of a selection, cached per kind until a parameter changes. */
+async function vectorField(m: { kind: 'flow' | 'field'; frame: FrameName; selection: Sel; k: number; cap: number }) {
+  const key = JSON.stringify([m.frame, m.selection, m.k, m.cap]);
+  const hit = vectorFields.get(m.kind);
+  if (hit?.key === key) return hit.field;
+  if (!voxelFrames.has(m.frame)) voxelFrames.set(m.frame, VoxelFrame.load(manifest, m.frame, fetchBytes));
+  const name: VectorName = m.kind === 'flow' ? 'V_vec' : 'B_vec';
+  const set = await (await voxelFrames.get(m.frame)!).selectVector(name, m.selection, m.cap / 2);
+  const field = latticeField((p) => voxelVectorAt(set, p, m.k, m.cap, KNN.search_factor));
+  vectorFields.set(m.kind, { key, field });
+  return field;
+}
+
 self.onmessage = async (e: MessageEvent<StatsRequest>) => {
   const m = e.data;
   try {
@@ -124,6 +140,15 @@ self.onmessage = async (e: MessageEvent<StatsRequest>) => {
       const shell = shellField(node, m.shellD, DISPLAY_BOUNDARIES);
       post({ type: 'knnShell', id: m.id, shell, shellD: m.shellD, ms: performance.now() - t0 },
         [shell.values.buffer, shell.flags.buffer]);
+    } else if (m.type === 'lines') {
+      const t0 = performance.now();
+      const field = await vectorField(m);
+      const o = { step: LINE.step, maxSteps: LINE.maxSteps, inside: insideSheath(DISPLAY_BOUNDARIES) };
+      const lines = m.kind === 'flow'
+        ? flowSeeds(m.density, DISPLAY_BOUNDARIES).map((s) => trace(field, s, 1, o))
+        : fieldSeeds(m.density, m.depth, DISPLAY_BOUNDARIES).map((s) => traceBoth(field, s, o));
+      const { points, offsets } = pack(lines);
+      post({ type: 'lines', id: m.id, kind: m.kind, points, offsets, ms: performance.now() - t0 }, [points.buffer, offsets.buffer]);
     } else if (m.type === 'knnProbe' && voxCache) {
       const r = voxelKnnAt(voxCache.v, m.point, voxCache.k, voxCache.cap, KNN.search_factor, voxCache.weighted);
       const quantity = JSON.parse(voxCache.key)[2] as QuantityName;

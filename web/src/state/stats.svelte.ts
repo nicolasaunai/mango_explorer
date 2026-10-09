@@ -1,5 +1,5 @@
 // Client side of the stats worker. Only the latest query's answer is kept.
-import type { KnnProbeReply, KnnReply, ProbeReply, QueryReply, Slot, StatsReply, StatsRequest } from '../workers/protocol';
+import type { KnnProbeReply, KnnReply, LineKind, LinesReply, ProbeReply, QueryReply, Slot, StatsReply, StatsRequest } from '../workers/protocol';
 import type { ShellGrid } from '../core/shell';
 import type { Plane, PlaneOffsets } from '../core/knnField';
 import type { Selection } from '../core/atlas';
@@ -13,7 +13,8 @@ export const stats = $state<{
   knn: KnnReply | null; knnProbe: KnnProbeReply | null;
   /** k-NN mode: the shell at depth `d` on the fine (theta, phi) grid */
   knnShell: { d: number; shell: ShellGrid } | null;
-}>({ pending: false, error: '', result: null, resultA: null, probe: null, knn: null, knnProbe: null, knnShell: null });
+  lines: { flow: LinesReply | null; field: LinesReply | null }; linesError: string;
+}>({ pending: false, error: '', result: null, resultA: null, probe: null, knn: null, knnProbe: null, knnShell: null, lines: { flow: null, field: null }, linesError: '' });
 
 let worker: Worker | null = null;
 let nextId = 1;
@@ -99,6 +100,25 @@ export function runKnnShell(frame: FrameName, quantity: QuantityName, stat: Stat
     if (r.type === 'knnShell' && r.shellD === shellWanted) stats.knnShell = { d: r.shellD, shell: r.shell };
     else if (r.type === 'error') stats.error = r.message;
   }, 60);
+}
+
+const latestLines: Record<LineKind, number> = { flow: 0, field: 0 };
+const linesTimer: Partial<Record<LineKind, ReturnType<typeof setTimeout>>> = {};
+
+/** Flow or field lines for the current parameters; debounced, the latest request per kind wins. A missing
+ * vector atlas only affects the lines (linesError), not the maps. */
+export function runLines(kind: LineKind, frame: FrameName, selection: Selection, k: number, cap: number,
+  density: number, depth: number) {
+  if (!worker) return;
+  const snap = $state.snapshot(selection);
+  clearTimeout(linesTimer[kind]);
+  linesTimer[kind] = setTimeout(async () => {
+    const id = (latestLines[kind] = nextId);
+    const r = await send({ type: 'lines', kind, frame, selection: snap, k, cap, density, depth });
+    if (id !== latestLines[kind]) return;
+    if (r.type === 'lines') { stats.lines[kind] = r; stats.linesError = ''; }
+    else if (r.type === 'error') stats.linesError = r.message;
+  }, 180);
 }
 
 let latestKnnProbe = 0;

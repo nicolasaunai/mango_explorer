@@ -5,6 +5,8 @@ import type { Plane, PlaneField, PlaneOffsets } from '../core/knnField';
 import type { KnnResult } from '../core/knn';
 import type { ShellGrid } from '../core/shell';
 
+export type LineKind = 'flow' | 'field';
+
 export type StatsRequest =
   | { type: 'init'; id: number; base: string }
   | { type: 'query'; id: number; slot: Slot; frame: FrameName; quantity: QuantityName; stat: Stat; selection: Selection; profileThetaMax: number; useNeff: boolean }
@@ -13,7 +15,9 @@ export type StatsRequest =
       planes: Plane[]; offsets: PlaneOffsets; k: number; cap: number; useNeff: boolean; shellD: number }
   | { type: 'knnShell'; id: number; frame: FrameName; quantity: QuantityName; stat: Stat; selection: Selection;
       k: number; cap: number; useNeff: boolean; shellD: number }
-  | { type: 'knnProbe'; id: number; point: [number, number, number]; cell: number };
+  | { type: 'knnProbe'; id: number; point: [number, number, number]; cell: number }
+  | { type: 'lines'; id: number; kind: LineKind; frame: FrameName; selection: Selection; k: number; cap: number;
+      density: number; depth: number };
 
 export type Slot = 'A' | 'B';
 export type QueryReply = {
@@ -39,11 +43,13 @@ export type KnnReply = {
 export type KnnProbeReply = { type: 'knnProbe'; id: number; cell: number; quantity: QuantityName; result: KnnResult; values: number[];
   k: number; kSearched: number; /** set for full-data voxel means: number of voxels used */ voxels?: number };
 export type KnnShellReply = { type: 'knnShell'; id: number; shell: ShellGrid; shellD: number; ms: number };
+export type LinesReply = { type: 'lines'; id: number; kind: LineKind; points: Float32Array; offsets: Uint32Array; ms: number };
 export type StatsReply =
   | { type: 'ready'; id: number; manifest: Manifest }
   | KnnShellReply
   | KnnReply
   | KnnProbeReply
+  | LinesReply
   | QueryReply
   | ProbeReply
   | { type: 'error'; id: number; message: string };
