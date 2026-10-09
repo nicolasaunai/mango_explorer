@@ -96,13 +96,37 @@ class Grid:
     def is_log(self, quantity: str) -> bool:
         return self.raw["quantities"][quantity]["scale"] == "log"
 
+    def frame_conditions(self, frame: str) -> tuple[str, ...]:
+        """Conditions that apply to a frame (a condition without "frames" applies to every frame)."""
+        return tuple(n for n, c in self.raw["conditions"].items() if frame in c.get("frames", self.frames))
+
+    def cube_frame(self, cube_id: str) -> str | None:
+        for cube in self.raw["cubes"]:
+            if cube["id"] == cube_id:
+                return cube.get("frame")
+        raise KeyError(f"unknown cube {cube_id!r}")
+
+    def cube_of_frame(self, frame: str) -> str:
+        for cube in self.raw["cubes"]:
+            if cube.get("frame") == frame:
+                return cube["id"]
+        raise KeyError(f"no cube for frame {frame!r}; frames: {self.frames}")
+
+    @property
+    def atlas_clock_deg(self) -> float:
+        return float(self.raw["pgsm"]["atlas_clock_deg"])
+
     def reference_radii(self):
         """(R_mp,ref(theta), R_bs,ref(theta)): the surfaces MANGO normalizes between; theta in radians."""
-        from mango_explorer.boundaries import paraboloid_r
+        from mango_explorer import boundaries as b
 
         ref = self.raw["reference_boundaries"]
+        if ref["kind"] == "paraboloid":
+            mp, bs = ref["magnetopause"], ref["bow_shock"]
+            return (lambda t: b.paraboloid_r(t, mp["nose"], mp["p"])), (lambda t: b.paraboloid_r(t, bs["nose"], bs["p"]))
         mp, bs = ref["magnetopause"], ref["bow_shock"]
-        return (lambda t: paraboloid_r(t, mp["nose"], mp["p"])), (lambda t: paraboloid_r(t, bs["nose"], bs["p"]))
+        r0, a = b.shue_r0(mp["bz_nt"], mp["pd_npa"]), b.shue_alpha(mp["bz_nt"], mp["pd_npa"])
+        return (lambda t: b.shue_mp(t, r0, a)), (lambda t: b.jelinek_bs(t, bs["pd_npa"]))
 
     @property
     def neff_interval_s(self) -> int:
