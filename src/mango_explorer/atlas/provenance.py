@@ -1,9 +1,7 @@
 """Capture provenance of space_mango, accounting for editable installs.
 
-When space_mango is installed editable (`pip install -e`), importlib.metadata.version()
-returns the version from install-time metadata, not the actual running code's commit.
-This module captures both the reported version and the actual git commit if the code
-lives in a git working tree.
+When space_mango is installed editable, importlib.metadata.version() returns install-time
+metadata, not the actual running code's commit; this module captures both plus git state.
 """
 from __future__ import annotations
 
@@ -12,19 +10,35 @@ import subprocess
 from pathlib import Path
 
 
-def _git_commit(path: Path) -> dict:
-    """Extract git commit info from a directory, or return {} if not in a git repo.
+def _git_commit(file_path: Path) -> dict:
+    """Extract git commit info from a file, or return {} if not tracked by git.
+
+    Only reports commit if the file is tracked by the git repo, to avoid reporting
+    the enclosing repository's commit when a package is installed in a gitignored
+    directory (e.g., .venv).
 
     Args:
-        path: Directory to check for git status
+        file_path: File path to check for git tracking and commit
 
     Returns:
         Dict with "commit" (7+ hex chars) and optionally "dirty": True,
-        or empty dict if not in a git repo or git command fails.
+        or empty dict if not in a git repo, not tracked, or git command fails.
     """
     try:
+        # Check if file is tracked by git
+        ls_files_result = subprocess.run(
+            ["git", "-C", str(file_path.parent), "ls-files", "--error-unmatch", str(file_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if ls_files_result.returncode != 0:
+            # File not tracked by git (or not in a git repo)
+            return {}
+
+        # File is tracked, get the commit
         result = subprocess.run(
-            ["git", "-C", str(path), "rev-parse", "--short", "HEAD"],
+            ["git", "-C", str(file_path.parent), "rev-parse", "--short", "HEAD"],
             capture_output=True,
             text=True,
             check=False,
@@ -37,7 +51,7 @@ def _git_commit(path: Path) -> dict:
 
         # Check if working tree is dirty
         status_result = subprocess.run(
-            ["git", "-C", str(path), "status", "--porcelain"],
+            ["git", "-C", str(file_path.parent), "status", "--porcelain"],
             capture_output=True,
             text=True,
             check=False,
@@ -55,17 +69,17 @@ def space_mango_provenance() -> dict:
     """Capture version and git commit of the running space_mango code.
 
     Returns:
-        Dict with at least "version" key. If space_mango's directory is inside
-        a git working tree, also includes "commit" and possibly "dirty": True.
+        Dict with at least "version" key; also includes "commit" and possibly
+        "dirty": True if the package is tracked in a git working tree.
     """
     import space_mango
 
     version = importlib.metadata.version("space-mango")
     info = {"version": version}
 
-    # Find the space_mango package directory and check for git
-    sm_path = Path(space_mango.__file__).parent
-    git_info = _git_commit(sm_path)
+    # Find the space_mango package __init__.py and check for git
+    sm_init = Path(space_mango.__file__)
+    git_info = _git_commit(sm_init)
     info.update(git_info)
 
     return info
