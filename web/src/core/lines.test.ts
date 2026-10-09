@@ -21,6 +21,10 @@ describe('seeds', () => {
     }
     expect(fieldSeeds(50, 0.4, b).every((p) => Math.abs(normalizedCoords(p, b).d - 0.4) < 1e-9)).toBe(true);
   });
+  it('field seeds stay inside the sheath when the depth is at a boundary', () => {
+    expect(fieldSeeds(20, 1, b).every((p) => Math.abs(normalizedCoords(p, b).d - 0.97) < 1e-9)).toBe(true);
+    expect(fieldSeeds(20, 0, b).every((p) => Math.abs(normalizedCoords(p, b).d - 0.03) < 1e-9)).toBe(true);
+  });
 });
 
 describe('lattice field', () => {

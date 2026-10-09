@@ -9,7 +9,8 @@ export type VectorField = (p: Vec3) => Vec3 | null;
 export type TraceOptions = { step: number; maxSteps: number; inside: (p: Vec3) => boolean };
 export type Polylines = { points: Float32Array; offsets: Uint32Array };
 
-export const LINE = { step: 0.1, maxSteps: 600, lattice: 0.5, flowDepth: 0.95, flowThetaMax: 60, fieldThetaMax: 120 };
+export const LINE = { step: 0.1, maxSteps: 600, lattice: 0.5, flowDepth: 0.95, flowThetaMax: 60, fieldThetaMax: 120,
+  fieldDepthMin: 0.03, fieldDepthMax: 0.97 };
 const GOLDEN = Math.PI * (3 - Math.sqrt(5));
 
 /** n points on the shell at depth d for theta in [0, thetaMax], evenly spread in solid angle (golden spiral). */
@@ -22,7 +23,9 @@ export function seeds(n: number, d: number, thetaMaxDeg: number, b: Boundaries):
   return out;
 }
 export const flowSeeds = (n: number, b: Boundaries) => seeds(n, LINE.flowDepth, LINE.flowThetaMax, b);
-export const fieldSeeds = (n: number, d: number, b: Boundaries) => seeds(n, d, LINE.fieldThetaMax, b);
+/** Field seeds on the shell at depth d, kept off the boundaries (a seed at D = 0 or 1 would stop at once). */
+export const fieldSeeds = (n: number, d: number, b: Boundaries) =>
+  seeds(n, Math.min(LINE.fieldDepthMax, Math.max(LINE.fieldDepthMin, d)), LINE.fieldThetaMax, b);
 
 /** `evaluate` on a cubic lattice of spacing h, computed on first use, interpolated trilinearly. */
 export function latticeField(evaluate: VectorField, h = LINE.lattice): VectorField & { evaluations(): number } {
