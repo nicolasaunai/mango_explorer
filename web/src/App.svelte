@@ -5,6 +5,7 @@
   import Viewport from './ui/Viewport.svelte';
   import { app, patch, syncHash } from './state/app.svelte';
   import { data, loadAtlas, selectionOf } from './state/data.svelte';
+  import { hasVectors } from './core/atlas';
   import { cancelLines, runKnn, runKnnShell, runLines, runQuery } from './state/stats.svelte';
   import Colorbar from './ui/Colorbar.svelte';
   import ThetaPhiMap from './ui/ThetaPhiMap.svelte';
@@ -33,12 +34,16 @@
     if (data.status !== 'ready' || app.source !== 'knn') return;
     untrack(() => runKnnShell(app.frame, app.quantity, app.stat, selectionOf(app), app.k, app.cap, app.neff, d));
   });
+  // lines need an atlas with vector sums; each kind re-traces only when its own layer or parameters change
+  const vectors = $derived(data.status === 'ready' && hasVectors(data.manifest));
+  const flowOn = $derived(vectors && app.layers.includes('flow'));
+  const fieldOn = $derived(vectors && app.layers.includes('field'));
   $effect(() => {
-    if (data.status !== 'ready' || !app.layers.includes('flow')) { untrack(() => cancelLines('flow')); return; }
+    if (!flowOn) { untrack(() => cancelLines('flow')); return; }
     runLines('flow', app.frame, selectionOf(app), app.k, app.cap, app.density, 0);
   });
   $effect(() => {
-    if (data.status !== 'ready' || !app.layers.includes('field')) { untrack(() => cancelLines('field')); return; }
+    if (!fieldOn) { untrack(() => cancelLines('field')); return; }
     runLines('field', app.frame, selectionOf(app), app.k, app.cap, app.density, app.depth);
   });
   $effect(() => {

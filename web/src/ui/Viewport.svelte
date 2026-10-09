@@ -3,6 +3,7 @@
   import { SceneView, type CameraPreset } from '../render/scene';
   import { app, patch } from '../state/app.svelte';
   import { data } from '../state/data.svelte';
+  import { hasVectors } from '../core/atlas';
   import { probe, probeKnn, stats } from '../state/stats.svelte';
   import { BOUNDARIES, BOUNDARY_NOTE } from '../state/boundaries';
   import { VIEWS, clockUndefined, mixesPolarity } from '../state/schema';
@@ -65,13 +66,16 @@
       rMp: BOUNDARIES.rMp, rBs: BOUNDARIES.rBs,
     });
   });
-  $effect(() => { view?.setLines('flow', app.layers.includes('flow') ? stats.lines.flow : null); });
-  $effect(() => { view?.setLines('field', app.layers.includes('field') ? stats.lines.field : null); });
+  // a layer in the URL is ignored when the atlas has no vector sums (its toggle is disabled)
+  const vectors = $derived(hasVectors(data.manifest));
+  const flowOn = $derived(vectors && app.layers.includes('flow'));
+  const fieldOn = $derived(vectors && app.layers.includes('field'));
+  $effect(() => { view?.setLines('flow', flowOn ? stats.lines.flow : null); });
+  $effect(() => { view?.setLines('field', fieldOn ? stats.lines.field : null); });
   $effect(() => { view?.setLinesDimmed('flow', stats.linesPending.flow); });
   $effect(() => { view?.setLinesDimmed('field', stats.linesPending.field); });
-  const linesOn = $derived(app.layers.includes('flow') || app.layers.includes('field'));
-  const linesUpdating = $derived((app.layers.includes('flow') && stats.linesPending.flow)
-    || (app.layers.includes('field') && stats.linesPending.field));
+  const linesOn = $derived(flowOn || fieldOn);
+  const linesUpdating = $derived((flowOn && stats.linesPending.flow) || (fieldOn && stats.linesPending.field));
   $effect(() => {
     const d = display.shown, s = display.shell;
     if (view && d) view.setShell(s, d.range, d.lut);
@@ -130,7 +134,7 @@
     {#if stats.error}<span class="tag warn">{stats.error}</span>{/if}
     {#if linesUpdating}<span class="tag muted">lines updating…</span>{/if}
     {#if linesOn}<span class="tag muted">lines: k-NN 1/d mean, k = {app.k}, cap {app.cap} R<sub>E</sub> · vectors mapped to normalized space</span>{/if}
-    {#if app.layers.includes('field') && mixesPolarity(app.frame, app.clock)}<span class="tag warn">field lines average opposite IMF orientations</span>{/if}
+    {#if fieldOn && mixesPolarity(app.frame, app.clock)}<span class="tag warn">field lines average opposite IMF orientations</span>{/if}
     {#if linesOn && stats.linesError}<span class="tag warn">lines: {stats.linesError}</span>{/if}
     <Inspector />
   </div>
@@ -138,8 +142,8 @@
     <div class="legend tag">
       <span><i style="background:#4FD1E8"></i>magnetopause</span>
       <span><i style="background:#F2A541"></i>bow shock</span>
-      {#if app.layers.includes('flow')}<span><i style="background:#7EE0C3"></i>flow lines (V)</span>{/if}
-      {#if app.layers.includes('field')}<span><i style="background:#C49BF2"></i>field lines (B)</span>{/if}
+      {#if flowOn}<span><i style="background:#7EE0C3"></i>flow lines (V)</span>{/if}
+      {#if fieldOn}<span><i style="background:#C49BF2"></i>field lines (B)</span>{/if}
       {#if app.frame === 'PGSM_fold' && app.layers.includes('tint')}
         <span><i style="background:#E58467"></i>θ<sub>Bn</sub> &lt; 45° (Q∥)</span>
         <span><i style="background:#7FA0D0"></i>θ<sub>Bn</sub> &gt; 45° (Q⊥)</span>

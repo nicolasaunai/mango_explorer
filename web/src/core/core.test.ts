@@ -211,4 +211,20 @@ describe('voxel k-NN', () => {
     const frame = await VoxelFrame.load(m, 'PGSM_fold', fetchBytes);
     await expect(frame.selectVector('B_vec', golden.atlas_mini.selection, 1)).rejects.toThrow(/no B_vec voxel sums/);
   });
+  it('tells whether every voxel frame carries the V and B vector sums', async () => {
+    const { hasVectors } = await import('./atlas');
+    const m = await loadManifest(fetchBytes);
+    expect(hasVectors(m)).toBe(true);
+    const noB = structuredClone(m);
+    const other = structuredClone(noB.voxels!.frames[0]);  // a second frame without B
+    other.frame = 'GSM';
+    delete other.quantities.B_vec_x;
+    noB.voxels!.frames.push(other);
+    expect(hasVectors(noB)).toBe(false);
+    const noV = structuredClone(m);
+    for (const f of noV.voxels!.frames) for (const c of 'xyz') delete f.quantities[`V_vec_${c}`];
+    expect(hasVectors(noV)).toBe(false);
+    expect(hasVectors({ ...m, voxels: undefined })).toBe(false);
+    expect(hasVectors(null)).toBe(false);
+  });
 });

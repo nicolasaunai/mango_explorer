@@ -18,6 +18,9 @@ export type Manifest = {
   samples?: { cube: string; fraction: number; n: number; base: FileEntry; quantities: Record<string, FileEntry> };
   voxels?: { size_re: number; frames: { frame: string; base: FileEntry; quantities: Record<string, FileEntry> }[] };
 };
+/** True when every voxel frame carries the flow (V) and field (B) vector sums the lines need. */
+export const hasVectors = (m: Manifest | null) =>
+  !!m?.voxels?.frames.length && m.voxels.frames.every((f) => 'V_vec_x' in f.quantities && 'B_vec_x' in f.quantities);
 export type Selection = Partial<Record<ConditionName, number[] | null>>;
 export type FetchBytes = (path: string) => Promise<ArrayBuffer>;
 

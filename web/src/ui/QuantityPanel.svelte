@@ -5,6 +5,8 @@
   import { isVoxelStat } from '../core/compute';
   import CopyPython from './CopyPython.svelte';
   import { stats } from '../state/stats.svelte';
+  import { data } from '../state/data.svelte';
+  import { hasVectors } from '../core/atlas';
 
   const q = grid.raw.quantities;
   const groups: { title: string; items: QuantityName[] }[] = [
@@ -19,6 +21,8 @@
     patch({ source, range: null, stat: allowed.includes(app.stat) ? app.stat : (allowed[0] as typeof app.stat) });
   };
   const fold = $derived(app.frame === 'PGSM_fold');
+  const vectors = $derived(hasVectors(data.manifest));
+  const NO_VECTORS = 'this atlas has no flow/field data (vector sums)';
   // spec labels are plain text ("N_p / N_p,sw", "cm^-3"); render subscripts and superscripts
   const fmt = (t: string) => t.replace(/_([A-Za-z0-9,]+)/g, '<sub>$1</sub>').replace(/\^(-?\d+)/g, '<sup>$1</sup>');
 </script>
@@ -96,9 +100,9 @@
       <input type="checkbox" disabled={!fold} checked={app.layers.includes('tint')} onchange={() => toggleLayer('tint')} />
       <span>Shock tinted by θ<sub>Bn</sub>{#if !fold}<span class="muted small"> (needs fold)</span>{/if}</span></label>
     <label class="opt"><input type="checkbox" checked={app.layers.includes('shells')} onchange={() => toggleLayer('shells')} /><span title="The surface of constant depth D between the magnetopause and the bow shock, coloured like the map below; the map's depth slider moves it">Depth shell (D of the map)</span></label>
-    <label class="opt"><input type="checkbox" checked={app.layers.includes('flow')} onchange={() => toggleLayer('flow')} /><span title="Ion bulk-flow streamlines from just inside the bow shock (dayside), traced downstream through the k-NN mean velocity">Flow lines (V)</span></label>
-    <label class="opt"><input type="checkbox" checked={app.layers.includes('field')} onchange={() => toggleLayer('field')} /><span title="Magnetic field lines through the depth shell's D, traced both ways through the k-NN mean field">Field lines (B)</span></label>
-    {#if app.layers.includes('flow') || app.layers.includes('field')}
+    <label class="opt" class:off={!vectors} title={vectors ? '' : NO_VECTORS}><input type="checkbox" disabled={!vectors} checked={vectors && app.layers.includes('flow')} onchange={() => toggleLayer('flow')} /><span title={vectors ? 'Ion bulk-flow streamlines from just inside the bow shock (dayside), traced downstream through the k-NN mean velocity' : NO_VECTORS}>Flow lines (V)</span></label>
+    <label class="opt" class:off={!vectors} title={vectors ? '' : NO_VECTORS}><input type="checkbox" disabled={!vectors} checked={vectors && app.layers.includes('field')} onchange={() => toggleLayer('field')} /><span title={vectors ? "Magnetic field lines through the depth shell's D, traced both ways through the k-NN mean field" : NO_VECTORS}>Field lines (B)</span></label>
+    {#if vectors && (app.layers.includes('flow') || app.layers.includes('field'))}
       <label class="num"><span>lines</span>
         <input type="range" min="50" max="400" step="10" value={app.density} onchange={(e) => patch({ density: Number((e.currentTarget as HTMLInputElement).value) })} />
         <span class="mono">{app.density}</span></label>
