@@ -199,6 +199,12 @@ export class SceneView {
     this.requestRender();
   }
 
+  /** Dim a kind of lines while newer ones are on their way. */
+  setLinesDimmed(kind: 'flow' | 'field', dim: boolean) {
+    (kind === 'flow' ? this.flowLines : this.fieldLines).setDimmed(dim);
+    this.requestRender();
+  }
+
   setMarker(p: [number, number, number] | null) {
     this.marker.visible = !!p;
     if (p) this.marker.position.set(p[0], p[2], -p[1]);

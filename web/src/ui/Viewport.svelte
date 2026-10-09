@@ -67,7 +67,11 @@
   });
   $effect(() => { view?.setLines('flow', app.layers.includes('flow') ? stats.lines.flow : null); });
   $effect(() => { view?.setLines('field', app.layers.includes('field') ? stats.lines.field : null); });
+  $effect(() => { view?.setLinesDimmed('flow', stats.linesPending.flow); });
+  $effect(() => { view?.setLinesDimmed('field', stats.linesPending.field); });
   const linesOn = $derived(app.layers.includes('flow') || app.layers.includes('field'));
+  const linesUpdating = $derived((app.layers.includes('flow') && stats.linesPending.flow)
+    || (app.layers.includes('field') && stats.linesPending.field));
   $effect(() => {
     const d = display.shown, s = display.shell;
     if (view && d) view.setShell(s, d.range, d.lut);
@@ -124,6 +128,7 @@
     {#if dragging}<span class="tag">{dragging.plane} plane · {axisOf[dragging.plane]} = {dragging.offset.toFixed(2)} R<sub>E</sub></span>{/if}
     {#if stats.pending}<span class="tag muted">updating…</span>{/if}
     {#if stats.error}<span class="tag warn">{stats.error}</span>{/if}
+    {#if linesUpdating}<span class="tag muted">lines updating…</span>{/if}
     {#if linesOn}<span class="tag muted">lines: k-NN 1/d mean, k = {app.k}, cap {app.cap} R<sub>E</sub> · vectors mapped to normalized space</span>{/if}
     {#if app.layers.includes('field') && mixesPolarity(app.frame, app.clock)}<span class="tag warn">field lines average opposite IMF orientations</span>{/if}
     {#if linesOn && stats.linesError}<span class="tag warn">lines: {stats.linesError}</span>{/if}

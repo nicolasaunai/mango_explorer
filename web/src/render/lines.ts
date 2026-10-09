@@ -3,20 +3,28 @@ import * as THREE from 'three';
 
 const ARROW_EVERY = 30;  // points between arrowheads (3 R_E at 0.1 R_E steps)
 const UP = new THREE.Vector3(0, 1, 0);
+const OPACITY = { line: 0.85, arrow: 1, dimmed: 0.3 };
 
 export class LinesLayer {
   readonly group = new THREE.Group();
   private lines: THREE.LineSegments;
   private arrows: THREE.InstancedMesh | null = null;
   private cone = new THREE.ConeGeometry(0.18, 0.55, 8);
+  private lineMaterial: THREE.LineBasicMaterial;
   private arrowMaterial: THREE.MeshBasicMaterial;
 
   constructor(color: string) {
-    this.lines = new THREE.LineSegments(new THREE.BufferGeometry(),
-      new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 }));
-    this.arrowMaterial = new THREE.MeshBasicMaterial({ color });
+    this.lineMaterial = new THREE.LineBasicMaterial({ color, transparent: true, opacity: OPACITY.line });
+    this.lines = new THREE.LineSegments(new THREE.BufferGeometry(), this.lineMaterial);
+    this.arrowMaterial = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: OPACITY.arrow });
     this.group.add(this.lines);
     this.group.visible = false;
+  }
+
+  /** Dim the lines while newer ones are being computed. */
+  setDimmed(dim: boolean) {
+    this.lineMaterial.opacity = dim ? OPACITY.dimmed : OPACITY.line;
+    this.arrowMaterial.opacity = dim ? OPACITY.dimmed : OPACITY.arrow;
   }
 
   /** Polylines in physics coordinates (X, Y, Z); null hides the layer. */
