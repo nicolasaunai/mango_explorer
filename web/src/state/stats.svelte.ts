@@ -1,5 +1,6 @@
-// Client side of the stats worker. Only the latest query's answer is kept.
-import type { KnnProbeReply, KnnReply, LineKind, LinesReply, ProbeReply, QueryReply, Slot, StatsReply, StatsRequest } from '../workers/protocol';
+// Client side of the stats and lines workers. Only the latest query's answer is kept.
+import type { KnnProbeReply, KnnReply, LineKind, LinesReply, LinesRequest, LinesWorkerReply, ProbeReply, QueryReply, Slot,
+  StatsReply, StatsRequest } from '../workers/protocol';
 import type { ShellGrid } from '../core/shell';
 import type { Plane, PlaneOffsets } from '../core/knnField';
 import type { Selection } from '../core/atlas';
@@ -14,33 +15,47 @@ export const stats = $state<{
   /** k-NN mode: the shell at depth `d` on the fine (theta, phi) grid */
   knnShell: { d: number; shell: ShellGrid } | null;
   lines: { flow: LinesReply | null; field: LinesReply | null }; linesError: string;
-}>({ pending: false, error: '', result: null, resultA: null, probe: null, knn: null, knnProbe: null, knnShell: null, lines: { flow: null, field: null }, linesError: '' });
+  /** a newer set of lines of that kind is on its way (the shown one is stale) */
+  linesPending: { flow: boolean; field: boolean };
+}>({ pending: false, error: '', result: null, resultA: null, probe: null, knn: null, knnProbe: null, knnShell: null,
+  lines: { flow: null, field: null }, linesError: '', linesPending: { flow: false, field: false } });
 
 let worker: Worker | null = null;
+/** Lines are traced in a worker of their own: a cold request takes seconds and must not hold the maps. */
+let linesWorker: Worker | null = null;
 let nextId = 1;
 const latestQuery: Record<Slot, number> = { A: 0, B: 0 };
 let latestProbe = 0;
-const waiters = new Map<number, (r: StatsReply) => void>();
 
 type WithoutId<T> = T extends unknown ? Omit<T, 'id'> : never;
 
-function send(msg: WithoutId<StatsRequest>): Promise<StatsReply> {
-  const id = nextId++;
-  return new Promise((resolve) => {
-    waiters.set(id, resolve);
-    worker!.postMessage({ ...msg, id });
-  });
+/** Request/reply over a worker: each request gets a fresh id and resolves with the reply carrying it. */
+function channel<Req, Rep extends { id: number }>(w: Worker) {
+  const waiters = new Map<number, (r: Rep) => void>();
+  w.onmessage = (e: MessageEvent<Rep>) => {
+    const f = waiters.get(e.data.id);
+    waiters.delete(e.data.id);
+    f?.(e.data);
+  };
+  return (msg: WithoutId<Req>): Promise<Rep> => {
+    const id = nextId++;
+    return new Promise((resolve) => {
+      waiters.set(id, resolve);
+      w.postMessage({ ...msg, id });
+    });
+  };
 }
+let send: (msg: WithoutId<StatsRequest>) => Promise<StatsReply>;
+let sendLines: (msg: WithoutId<Extract<LinesRequest, { id: number }>>) => Promise<LinesWorkerReply>;
 
 export async function startWorker(base: string) {
   worker = new Worker(new URL('../workers/stats.worker.ts', import.meta.url), { type: 'module' });
-  worker.onmessage = (e: MessageEvent<StatsReply>) => {
-    const w = waiters.get(e.data.id);
-    waiters.delete(e.data.id);
-    w?.(e.data);
-  };
-  const r = await send({ type: 'init', base });
+  linesWorker = new Worker(new URL('../workers/lines.worker.ts', import.meta.url), { type: 'module' });
+  send = channel<StatsRequest, StatsReply>(worker);
+  sendLines = channel<Extract<LinesRequest, { id: number }>, LinesWorkerReply>(linesWorker);
+  const [r, rl] = await Promise.all([send({ type: 'init', base }), sendLines({ type: 'init', base })]);
   if (r.type === 'error') throw new Error(r.message);
+  if (rl.type === 'error') throw new Error(rl.message);
 }
 
 /** Statistics for the current conditions (slot B) or the pinned comparison set (slot A). */
@@ -109,16 +124,26 @@ const linesTimer: Partial<Record<LineKind, ReturnType<typeof setTimeout>>> = {};
  * vector atlas only affects the lines (linesError), not the maps. */
 export function runLines(kind: LineKind, frame: FrameName, selection: Selection, k: number, cap: number,
   density: number, depth: number) {
-  if (!worker) return;
+  if (!linesWorker) return;
   const snap = $state.snapshot(selection);
+  stats.linesPending[kind] = true;
   clearTimeout(linesTimer[kind]);
   linesTimer[kind] = setTimeout(async () => {
     const id = (latestLines[kind] = nextId);
-    const r = await send({ type: 'lines', kind, frame, selection: snap, k, cap, density, depth });
-    if (id !== latestLines[kind]) return;
+    const r = await sendLines({ type: 'lines', kind, frame, selection: snap, k, cap, density, depth });
+    if (id !== latestLines[kind] || r.type === 'superseded') return;
+    stats.linesPending[kind] = false;
     if (r.type === 'lines') { stats.lines[kind] = r; stats.linesError = ''; }
     else if (r.type === 'error') stats.linesError = r.message;
   }, 180);
+}
+
+/** The layer was turned off: forget the scheduled request, the pending one and any answer on its way. */
+export function cancelLines(kind: LineKind) {
+  clearTimeout(linesTimer[kind]);
+  latestLines[kind] = 0;
+  stats.linesPending[kind] = false;
+  linesWorker?.postMessage({ type: 'cancel', kind } satisfies LinesRequest);
 }
 
 let latestKnnProbe = 0;

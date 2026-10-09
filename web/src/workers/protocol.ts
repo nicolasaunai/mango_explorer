@@ -15,9 +15,15 @@ export type StatsRequest =
       planes: Plane[]; offsets: PlaneOffsets; k: number; cap: number; useNeff: boolean; shellD: number }
   | { type: 'knnShell'; id: number; frame: FrameName; quantity: QuantityName; stat: Stat; selection: Selection;
       k: number; cap: number; useNeff: boolean; shellD: number }
-  | { type: 'knnProbe'; id: number; point: [number, number, number]; cell: number }
+  | { type: 'knnProbe'; id: number; point: [number, number, number]; cell: number };
+
+/** The lines worker: init, then line requests (only the newest pending one per kind is traced); `cancel`
+ * drops the pending request of a kind (no reply of its own). */
+export type LinesRequest =
+  | { type: 'init'; id: number; base: string }
   | { type: 'lines'; id: number; kind: LineKind; frame: FrameName; selection: Selection; k: number; cap: number;
-      density: number; depth: number };
+      density: number; depth: number }
+  | { type: 'cancel'; kind: LineKind };
 
 export type Slot = 'A' | 'B';
 export type QueryReply = {
@@ -44,12 +50,17 @@ export type KnnProbeReply = { type: 'knnProbe'; id: number; cell: number; quanti
   k: number; kSearched: number; /** set for full-data voxel means: number of voxels used */ voxels?: number };
 export type KnnShellReply = { type: 'knnShell'; id: number; shell: ShellGrid; shellD: number; ms: number };
 export type LinesReply = { type: 'lines'; id: number; kind: LineKind; points: Float32Array; offsets: Uint32Array; ms: number };
+/** `superseded`: a newer request of the same kind (or a cancel) replaced it before it was traced. */
+export type LinesWorkerReply =
+  | { type: 'ready'; id: number }
+  | LinesReply
+  | { type: 'superseded'; id: number }
+  | { type: 'error'; id: number; message: string };
 export type StatsReply =
   | { type: 'ready'; id: number; manifest: Manifest }
   | KnnShellReply
   | KnnReply
   | KnnProbeReply
-  | LinesReply
   | QueryReply
   | ProbeReply
   | { type: 'error'; id: number; message: string };
