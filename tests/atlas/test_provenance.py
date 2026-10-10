@@ -4,6 +4,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from mango_explorer.atlas.provenance import _git_commit, space_mango_provenance
 
 
@@ -113,6 +115,7 @@ def test_git_commit_ignored_file(tmp_path: Path) -> None:
 
 def test_space_mango_provenance_has_version() -> None:
     """Smoke test: space_mango_provenance() returns dict with version key."""
+    pytest.importorskip("space_mango")  # not installed in CI (atlas builds only)
     result = space_mango_provenance()
     assert isinstance(result, dict)
     assert "version" in result
