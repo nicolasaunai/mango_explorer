@@ -8,6 +8,8 @@
   import { data } from '../state/data.svelte';
   import { tintAvailable, tintReason } from '../state/imf';
   import { hasVectors } from '../core/atlas';
+  import type { Seeding } from '../core/lines';
+  import type { LineKind } from '../workers/protocol';
 
   const q = grid.raw.quantities;
   const groups: { title: string; items: QuantityName[] }[] = [
@@ -24,9 +26,37 @@
   const tintOk = $derived(tintAvailable(app.frame, app.clock, app.cone));
   const vectors = $derived(hasVectors(data.manifest));
   const NO_VECTORS = 'this atlas has no flow/field data (vector sums)';
+  const setSeeds = (kind: LineKind, p: Partial<Seeding>) => patch({ seeds: { ...app.seeds, [kind]: { ...app.seeds[kind], ...p } } });
+  const NORMAL = { XY: 'Z', XZ: 'Y', YZ: 'X' } as const;
   // spec labels are plain text ("N_p / N_p,sw", "cm^-3"); render subscripts and superscripts
   const fmt = (t: string) => t.replace(/_([A-Za-z0-9,]+)/g, '<sub>$1</sub>').replace(/\^(-?\d+)/g, '<sup>$1</sup>');
 </script>
+
+{#snippet seeding(kind: LineKind)}
+  {@const s = app.seeds[kind]}
+  <div class="seeding">
+    <div class="seg" role="group" aria-label="Where the {kind} lines start">
+      <button type="button" aria-pressed={s.mode === 'volume'} title="Seeds spread through the whole magnetosheath (θ < 120°)"
+        onclick={() => setSeeds(kind, { mode: 'volume' })}>Volume</button>
+      <button type="button" aria-pressed={s.mode === 'plane'} title="Seeds on a grid over the part of a plane inside the magnetosheath"
+        onclick={() => setSeeds(kind, { mode: 'plane' })}>Plane</button>
+    </div>
+    {#if s.mode === 'plane'}
+      <div class="seg" role="group" aria-label="Seed plane of the {kind} lines">
+        {#each PLANES as pl (pl)}
+          <button type="button" aria-pressed={s.plane === pl} onclick={() => setSeeds(kind, { plane: pl })}>{pl}</button>
+        {/each}
+      </div>
+      <label class="num"><span>at {NORMAL[s.plane]} (R<sub>E</sub>)</span>
+        <input id={`seed-offset-${kind}`} type="number" step="0.5" min="-30" max="30" value={s.offset} class="mono"
+          onchange={(e) => { const v = Number((e.currentTarget as HTMLInputElement).value); if (Number.isFinite(v)) setSeeds(kind, { offset: Math.max(-30, Math.min(30, v)) }); }} />
+        <button type="button" class="link" onclick={() => setSeeds(kind, { offset: 0 })}>0</button></label>
+    {/if}
+    <label class="num"><span>lines</span>
+      <input type="range" min="50" max="400" step="10" value={s.n} onchange={(e) => setSeeds(kind, { n: Number((e.currentTarget as HTMLInputElement).value) })} />
+      <span class="mono">{s.n}</span></label>
+  </div>
+{/snippet}
 
 <section class="panel" aria-label="Quantity and layers">
   <div class="ctl">
@@ -101,13 +131,10 @@
       <input type="checkbox" disabled={!tintOk} checked={app.layers.includes('tint')} onchange={() => toggleLayer('tint')} />
       <span>Shock tinted by θ<sub>Bn</sub>{#if !tintOk}<span class="muted small"> (IMF direction ambiguous)</span>{/if}</span></label>
     <label class="opt"><input type="checkbox" checked={app.layers.includes('shells')} onchange={() => toggleLayer('shells')} /><span title="The surface of constant depth D between the magnetopause and the bow shock, coloured like the map below; the map's depth slider moves it">Depth shell (D of the map)</span></label>
-    <label class="opt" class:off={!vectors} title={vectors ? '' : NO_VECTORS}><input type="checkbox" disabled={!vectors} checked={vectors && app.layers.includes('flow')} onchange={() => toggleLayer('flow')} /><span title={vectors ? 'Ion bulk-flow streamlines from just inside the bow shock (dayside), traced downstream through the k-NN mean velocity' : NO_VECTORS}>Flow lines (V)</span></label>
-    <label class="opt" class:off={!vectors} title={vectors ? '' : NO_VECTORS}><input type="checkbox" disabled={!vectors} checked={vectors && app.layers.includes('field')} onchange={() => toggleLayer('field')} /><span title={vectors ? "Magnetic field lines through the depth shell's D, traced both ways through the k-NN mean field" : NO_VECTORS}>Field lines (B)</span></label>
-    {#if vectors && (app.layers.includes('flow') || app.layers.includes('field'))}
-      <label class="num"><span>lines</span>
-        <input type="range" min="50" max="400" step="10" value={app.density} onchange={(e) => patch({ density: Number((e.currentTarget as HTMLInputElement).value) })} />
-        <span class="mono">{app.density}</span></label>
-    {/if}
+    <label class="opt" class:off={!vectors} title={vectors ? '' : NO_VECTORS}><input type="checkbox" disabled={!vectors} checked={vectors && app.layers.includes('flow')} onchange={() => toggleLayer('flow')} /><span title={vectors ? 'Ion bulk-flow streamlines through the seeds, traced both ways through the k-NN mean velocity' : NO_VECTORS}>Flow lines (V)</span></label>
+    {#if vectors && app.layers.includes('flow')}{@render seeding('flow')}{/if}
+    <label class="opt" class:off={!vectors} title={vectors ? '' : NO_VECTORS}><input type="checkbox" disabled={!vectors} checked={vectors && app.layers.includes('field')} onchange={() => toggleLayer('field')} /><span title={vectors ? 'Magnetic field lines through the seeds, traced both ways through the k-NN mean field' : NO_VECTORS}>Field lines (B)</span></label>
+    {#if vectors && app.layers.includes('field')}{@render seeding('field')}{/if}
     <label class="opt" title="Hatch cells whose samples come from few spacecraft passes (distinct spacecraft-hours): bins N_eff &lt; {grid.reliability.min_neff}, k-NN &lt; {grid.raw.knn.min_neff}">
       <input type="checkbox" checked={app.neff} onchange={() => patch({ neff: !app.neff })} /><span>Flag few-pass cells (N<sub>eff</sub>)</span></label>
   </div>
@@ -122,6 +149,7 @@
   .opt input { accent-color: var(--mp); }
   .opt.off { opacity: 0.55; }
   .small { font-size: 11px; }
+  .seeding { display: grid; gap: 5px; margin: 0 0 6px 20px; }
   .na { margin: 6px 0 0; font-size: 11.5px; color: var(--muted); }
   .chips { display: flex; flex-wrap: wrap; gap: 4px; }
   .num { display: grid; grid-template-columns: 1fr 1.4fr 2.6em; gap: 6px; align-items: center; font-size: 12px; }

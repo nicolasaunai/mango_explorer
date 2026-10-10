@@ -4,6 +4,7 @@ import type { ProfilePoint, Stat } from '../core/compute';
 import type { Plane, PlaneField, PlaneOffsets } from '../core/knnField';
 import type { KnnResult } from '../core/knn';
 import type { ShellGrid } from '../core/shell';
+import type { Seeding } from '../core/lines';
 
 export type LineKind = 'flow' | 'field';
 
@@ -22,7 +23,7 @@ export type StatsRequest =
 export type LinesRequest =
   | { type: 'init'; id: number; base: string }
   | { type: 'lines'; id: number; kind: LineKind; frame: FrameName; selection: Selection; k: number; cap: number;
-      density: number; depth: number }
+      seeding: Seeding }
   | { type: 'cancel'; kind: LineKind };
 
 export type Slot = 'A' | 'B';
@@ -49,7 +50,8 @@ export type KnnReply = {
 export type KnnProbeReply = { type: 'knnProbe'; id: number; cell: number; quantity: QuantityName; result: KnnResult; values: number[];
   k: number; kSearched: number; /** set for full-data voxel means: number of voxels used */ voxels?: number };
 export type KnnShellReply = { type: 'knnShell'; id: number; shell: ShellGrid; shellD: number; ms: number };
-export type LinesReply = { type: 'lines'; id: number; kind: LineKind; points: Float32Array; offsets: Uint32Array; ms: number };
+/** `seeds`: the seed positions in plane mode (x, y, z interleaved), empty in volume mode. */
+export type LinesReply = { type: 'lines'; id: number; kind: LineKind; points: Float32Array; offsets: Uint32Array; seeds: Float32Array; ms: number };
 /** `superseded`: a newer request of the same kind (or a cancel) replaced it before it was traced. */
 export type LinesWorkerReply =
   | { type: 'ready'; id: number }

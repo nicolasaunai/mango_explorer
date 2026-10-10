@@ -2,7 +2,7 @@
 // Only the newest pending request per kind is traced; older ones are answered `superseded`.
 import { httpFetcher, loadManifest, type FetchBytes, type Manifest } from '../core/atlas';
 import { VoxelFrame, voxelVectorAt, type VectorName, type VectorVoxelSet } from '../core/voxels';
-import { LINE, fieldSeeds, flowSeeds, insideSheath, latticeField, pack, trace, traceBoth, type VectorField } from '../core/lines';
+import { LINE, insideSheath, latticeField, pack, seedsFor, traceBoth, type VectorField } from '../core/lines';
 import { DISPLAY_BOUNDARIES } from '../core/display';
 import { grid } from '../core/grid';
 import type { LineKind, LinesRequest, LinesWorkerReply } from './protocol';
@@ -17,7 +17,7 @@ const post = (msg: LinesWorkerReply, transfer: Transferable[] = []) => (self as 
 const voxelFrames = new Map<string, Promise<VoxelFrame>>();
 /** Per kind: the summed vector voxels of (frame, selection, cap), kept when only k changes ... */
 const sets = new Map<LineKind, { key: string; set: VectorVoxelSet }>();
-/** ... and the lattice field of that set and k, kept when only the density or depth changes. */
+/** ... and the lattice field of that set and k, kept when only the seeding changes. */
 const fields = new Map<LineKind, { key: string; field: VectorField }>();
 
 function voxelFrame(frame: string) {
@@ -50,11 +50,12 @@ async function traceLines(m: LinesMsg) {
     const t0 = performance.now();
     const field = await vectorField(m);
     const o = { step: LINE.step, maxSteps: LINE.maxSteps, inside: insideSheath(DISPLAY_BOUNDARIES) };
-    const lines = m.kind === 'flow'
-      ? flowSeeds(m.density, DISPLAY_BOUNDARIES).map((s) => trace(field, s, 1, o))
-      : fieldSeeds(m.density, m.depth, DISPLAY_BOUNDARIES).map((s) => traceBoth(field, s, o));
-    const { points, offsets } = pack(lines);
-    post({ type: 'lines', id: m.id, kind: m.kind, points, offsets, ms: performance.now() - t0 }, [points.buffer, offsets.buffer]);
+    // seeds may sit anywhere in the sheath: trace both ways, for flow lines too
+    const starts = seedsFor(m.seeding, DISPLAY_BOUNDARIES);
+    const { points, offsets } = pack(starts.map((s) => traceBoth(field, s, o)));
+    const seeds = new Float32Array(m.seeding.mode === 'plane' ? starts.flat() : []);
+    post({ type: 'lines', id: m.id, kind: m.kind, points, offsets, seeds, ms: performance.now() - t0 },
+      [points.buffer, offsets.buffer, seeds.buffer]);
   } catch (err) {
     post({ type: 'error', id: m.id, message: err instanceof Error ? err.message : String(err) });
   }

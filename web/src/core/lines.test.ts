@@ -1,29 +1,39 @@
 import { describe, expect, it } from 'vitest';
-import { LINE, fieldSeeds, flowSeeds, insideSheath, latticeField, pack, seeds, trace, traceBoth, type Vec3 } from './lines';
+import { LINE, insideSheath, latticeField, pack, planeSeeds, seedsFor, trace, traceBoth, volumeSeeds, type Vec3 } from './lines';
 import { normalizedCoords } from './geometry';
 
 const b = { rMp: () => 10, rBs: () => 14 };
 const always = { step: 0.1, maxSteps: 10, inside: () => true };
 
 describe('seeds', () => {
-  it('n seeds on the shell at depth d, spread evenly in solid angle', () => {
-    const s = seeds(400, 0.3, 60, b);
-    expect(s).toHaveLength(400);
-    for (const p of s) expect(normalizedCoords(p, b).d).toBeCloseTo(0.3, 9);
-    const inner = s.filter((p) => normalizedCoords(p, b).thetaDeg < 30).length / s.length;
-    expect(inner).toBeCloseTo((1 - Math.cos(Math.PI / 6)) / (1 - Math.cos(Math.PI / 3)), 1);
+  const inSheath = (p: Vec3) => { const n = normalizedCoords(p, b); return n.d >= LINE.seedDepthMin - 1e-9 && n.d <= LINE.seedDepthMax + 1e-9 && n.thetaDeg < LINE.thetaMax; };
+  it('volume: n seeds through the sheath, spread evenly in depth and solid angle, always the same', () => {
+    const s = volumeSeeds(2000, b);
+    expect(s).toHaveLength(2000);
+    expect(s.every(inSheath)).toBe(true);
+    const cMax = Math.cos((LINE.thetaMax * Math.PI) / 180);
+    const dayside = s.filter((p) => normalizedCoords(p, b).thetaDeg < 60).length / s.length;
+    expect(dayside).toBeCloseTo((1 - Math.cos(Math.PI / 3)) / (1 - cMax), 1);
+    const deep = s.filter((p) => normalizedCoords(p, b).d < 0.5).length / s.length;
+    expect(deep).toBeCloseTo(0.5, 1);
+    expect(volumeSeeds(2000, b)).toEqual(s);
   });
-  it('flow seeds sit just inside the bow shock on the dayside; field seeds on the chosen shell', () => {
-    for (const p of flowSeeds(50, b)) {
-      const n = normalizedCoords(p, b);
-      expect(n.d).toBeCloseTo(LINE.flowDepth, 9);
-      expect(n.thetaDeg).toBeLessThan(LINE.flowThetaMax);
+  it('plane: about n seeds on the plane, inside the sheath only, always the same', () => {
+    for (const [plane, axis] of [['XY', 2], ['XZ', 1], ['YZ', 0]] as const) {
+      const s = planeSeeds(150, plane, 3, b);
+      expect(s.length).toBeGreaterThan(150 * 0.75);
+      expect(s.length).toBeLessThan(150 * 1.25);
+      for (const p of s) expect(p[axis]).toBe(3);
+      expect(s.every(inSheath)).toBe(true);
+      expect(planeSeeds(150, plane, 3, b)).toEqual(s);
     }
-    expect(fieldSeeds(50, 0.4, b).every((p) => Math.abs(normalizedCoords(p, b).d - 0.4) < 1e-9)).toBe(true);
   });
-  it('field seeds stay inside the sheath when the depth is at a boundary', () => {
-    expect(fieldSeeds(20, 1, b).every((p) => Math.abs(normalizedCoords(p, b).d - 0.97) < 1e-9)).toBe(true);
-    expect(fieldSeeds(20, 0, b).every((p) => Math.abs(normalizedCoords(p, b).d - 0.03) < 1e-9)).toBe(true);
+  it('plane: no seeds where the plane misses the sheath', () => {
+    expect(planeSeeds(150, 'YZ', 25, b)).toEqual([]);
+  });
+  it('seedsFor picks the mode', () => {
+    expect(seedsFor({ mode: 'volume', plane: 'XZ', offset: 0, n: 80 }, b)).toEqual(volumeSeeds(80, b));
+    expect(seedsFor({ mode: 'plane', plane: 'YZ', offset: 5, n: 80 }, b)).toEqual(planeSeeds(80, 'YZ', 5, b));
   });
 });
 

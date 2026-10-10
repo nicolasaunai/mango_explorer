@@ -13,7 +13,7 @@ current parameters (frame, IMF clock/cone/M_A selection, k, cap). Each kind has 
 |---|----------|
 | D1 | 3D lines, both V (flow) and B (field), separate toggles. |
 | D2 | Vectors are mapped into normalized space with the same transformation as positions (per sample, before averaging), so that flow/field tangent to the real boundaries stays tangent to the drawn reference boundaries. |
-| D3 | Automatic seeding. Flow: grid just inside the bow shock (D = 0.95), dayside θ < 60°, traced downstream. Field: grid on the depth shell at the depth slider's D, traced both ways. One density control. |
+| D3 | Seeding per kind, independent of the depth slider and the depth shell (PI, 2026-10-10; replaces the first version: flow at D = 0.95 dayside traced downstream, field on the slider's shell). Each kind has its own mode — Volume (spread through the whole sheath) or Plane (a grid on its own XY/XZ/YZ plane at an offset) — and its own line count. Both kinds are traced both ways. |
 | D4 | Vector field = k-NN distance-weighted mean (sklearn `KNeighborsRegressor(weights='distance')` style) from full-data voxel sums, with the current k, cap, frame and selection — regardless of the maps' statistics source (bins or k-NN). |
 
 ## 1. Vector mapping into normalized space (D2)
@@ -64,14 +64,18 @@ rotation about X by the clock angle; under the fold, B → −B for Bx_imf < 0 (
   (spec `voxels.knn`, weights 1/max(d, size/2)), with S the component sums. NaN under the same cap rule.
 - **Lattice cache:** the field is evaluated lazily on a 0.5 R_E lattice (only cells the tracer visits) and
   trilinearly interpolated; the cache is keyed by (frame, selection, k, cap, kind) and dropped on change.
-- **Seeds (D3):** flow — nodes at D = 0.95 on a θ–φ grid with θ < 60°; field — nodes on the shell at the
-  slider depth, θ < 120°. The density control (50–400, default 150) sets the node count; nodes are spread
-  evenly in solid angle (not in θ) so lines are not crowded near θ = 0.
+- **Seeds (D3):** per kind, `{mode, plane, offset, n}` (n 50–400, default volume, 150). Volume: n points
+  of a Halton sequence (bases 2, 3, 5), even in D ∈ [0.03, 0.97] and in solid angle for θ < 120° — even in
+  the sheath's own coordinates, so the dayside is not starved as it would be with uniform R_E³ seeding;
+  always the same points, so a link reproduces the lines. Plane: a square grid on the plane (XY at Z = o,
+  XZ at Y = o, YZ at X = o, atlas coordinates like the slices), kept where 0.03 ≤ D ≤ 0.97 and θ < 120°;
+  spacing √(area/n) with the area estimated on a 0.25 R_E grid, so about n seeds. Plane seeds are drawn
+  as dots (a dot without a line marks a seed where the field is missing).
 - **Tracing:** RK4 on the unit direction of the interpolated field, step 0.1 R_E. Stop when D < 0 or D > 1,
-  θ ≥ 120°, the field is NaN (cap), the field magnitude is ~0, or after 600 steps. Flow: forward only.
-  Field: both directions from the seed, joined.
-- **Requests:** a new worker message `lines` (kind, frame, selection, k, cap, density, depth) answered with
-  polylines (one Float32Array of points, one Uint32Array of offsets). Sent only when a toggle is on;
+  θ ≥ 120°, the field is NaN (cap), the field magnitude is ~0, or after 600 steps. Both kinds: both
+  directions from the seed, joined (seeds sit anywhere in the sheath, not at the bow shock).
+- **Requests:** a new worker message `lines` (kind, frame, selection, k, cap, seeding) answered with
+  polylines (one Float32Array of points, one Uint32Array of offsets) and the plane seeds. Sent only when a toggle is on;
   debounced like k-NN; stale replies discarded by id. Moving the depth re-traces field lines only.
 
 ## 4. Display and controls
@@ -97,8 +101,10 @@ vitest:
 - Vector voxel k-NN matches Python on a golden case (extend `scripts/make_goldens.py`).
 - Tracer: uniform field gives straight lines; a circular field about X closes on itself; lines stop at the
   sheath edges and at NaN.
-- Seeds: count follows the density; all seeds sit at the requested D; even spread in solid angle.
-- URL round-trip for `flow`, `field`, `ln`.
+- Seeds: volume — n seeds inside the sheath, even in D and solid angle, deterministic; plane — on the
+  plane, inside the sheath, about n, none where the plane misses the sheath.
+- URL round-trip for `flow`, `field` and the seedings `sv` (flow) / `sb` (field) as mode~plane~offset~n;
+  old `ln` links set n for both kinds.
 
 ## Not included (later, if wanted)
 

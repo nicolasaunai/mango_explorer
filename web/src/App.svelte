@@ -41,11 +41,11 @@
   const fieldOn = $derived(vectors && app.layers.includes('field'));
   $effect(() => {
     if (!flowOn) { untrack(() => cancelLines('flow')); return; }
-    runLines('flow', app.frame, selectionOf(app.frame, app), app.k, app.cap, app.density, 0);
+    runLines('flow', app.frame, selectionOf(app.frame, app), app.k, app.cap, app.seeds.flow);
   });
   $effect(() => {
     if (!fieldOn) { untrack(() => cancelLines('field')); return; }
-    runLines('field', app.frame, selectionOf(app.frame, app), app.k, app.cap, app.density, app.depth);
+    runLines('field', app.frame, selectionOf(app.frame, app), app.k, app.cap, app.seeds.field);
   });
   $effect(() => {
     if (data.status !== 'ready' || !app.pinA || app.source !== 'bins') return;

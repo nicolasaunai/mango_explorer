@@ -20,6 +20,14 @@ export const STATS_FOR = {
 export const PLANES = ['XY', 'XZ', 'YZ'] as const;
 export const LAYERS = ['mp', 'bs', 'tint', 'shells', 'slice', 'flow', 'field'] as const;
 
+/** Seeds of one kind of line: spread through the sheath, or on a plane of its own (see core/lines Seeding). */
+const Seeding = z.object({
+  mode: z.enum(['volume', 'plane']),
+  plane: z.enum(PLANES),
+  offset: z.number().min(-30).max(30),
+  n: z.number().int().min(50).max(400),
+});
+
 export const ViewState = z.object({
   frame: z.enum(['GSM', 'PGSM']),
   /** GSM: IMF clock sectors that filter the data */
@@ -44,8 +52,8 @@ export const ViewState = z.object({
   k: z.number().int().min(1),
   cap: z.number().min(0.25).max(10),
   neff: z.boolean(),
-  /** seeds per kind of line (flow, field) */
-  density: z.number().int().min(50).max(400),
+  /** where the flow lines and the field lines start, each kind its own */
+  seeds: z.object({ flow: Seeding, field: Seeding }),
   /** slice positions along their normals, R_E: XY at Z, XZ at Y, YZ at X */
   offsets: z.object({ XY: z.number().min(-40).max(40), XZ: z.number().min(-40).max(40), YZ: z.number().min(-40).max(40) }),
 });
@@ -73,7 +81,10 @@ export const DEFAULT_STATE: ViewState = {
   k: grid.raw.knn.k,
   cap: grid.raw.knn.cap_re,
   neff: grid.raw.neff.overlay_default,
-  density: 150,
+  seeds: {
+    flow: { mode: 'volume', plane: 'XZ', offset: 0, n: 150 },
+    field: { mode: 'volume', plane: 'XZ', offset: 0, n: 150 },
+  },
   offsets: { XY: 0, XZ: 0, YZ: 0 },
 };
 
@@ -94,6 +105,22 @@ const wrapClock = (s: string | null) => {
 /** Old links stored the shell as a depth bin index. */
 const binCentre = (i: number) => (Number.isInteger(i) && i >= 0 && i < grid.dEdges.length - 1 ? (grid.dEdges[i] + grid.dEdges[i + 1]) / 2 : undefined);
 
+/** URL keys of the seeding: V (flow) and B (field) lines, as mode~plane~offset~n. */
+const SEED_KEYS = [['flow', 'sv'], ['field', 'sb']] as const;
+
+/** Each kind from its key, else its default; old links only had a line count `ln` shared by both kinds. */
+function decodeSeeds(p: URLSearchParams): ViewState['seeds'] {
+  const old = Seeding.shape.n.safeParse(p.has('ln') ? Number(p.get('ln')) : undefined);
+  const out = { ...DEFAULT_STATE.seeds };
+  for (const [kind, key] of SEED_KEYS) {
+    const fallback = old.success ? { ...DEFAULT_STATE.seeds[kind], n: old.data } : DEFAULT_STATE.seeds[kind];
+    const [mode, plane, offset, n] = (p.get(key) ?? '').split('~');
+    const r = Seeding.safeParse({ mode, plane, offset: Number(offset), n: Number(n) });
+    out[kind] = p.has(key) && r.success ? r.data : fallback;
+  }
+  return out;
+}
+
 const list = (a: number[]) => a.join('.');
 const unlist = (s: string | null) => (s ? s.split('.').filter(Boolean).map(Number) : undefined);
 
@@ -107,7 +134,11 @@ export function encodeHash(s: ViewState): string {
   if (s.range) p.set('cr', s.range.map((x) => +x.toPrecision(5)).join('~'));
   if (s.offsets.XY || s.offsets.XZ || s.offsets.YZ) p.set('po', [s.offsets.XY, s.offsets.XZ, s.offsets.YZ].map((x) => +x.toFixed(2)).join('~'));
   if (s.neff !== DEFAULT_STATE.neff) p.set('ne', s.neff ? '1' : '0');
-  if (s.density !== DEFAULT_STATE.density) p.set('ln', String(s.density));
+  for (const [kind, key] of SEED_KEYS) {
+    const v = s.seeds[kind], d = DEFAULT_STATE.seeds[kind];
+    if (v.mode !== d.mode || v.plane !== d.plane || v.offset !== d.offset || v.n !== d.n)
+      p.set(key, [v.mode, v.plane, +v.offset.toFixed(2), v.n].join('~'));
+  }
   if (s.source === 'knn') { p.set('src', 'knn'); p.set('k', String(s.k)); p.set('cap', String(s.cap)); }
   if (s.pinA) { p.set('pa', [s.pinA.clock, s.pinA.cone, s.pinA.ma].map(list).join('~')); p.set('cmp', s.cmp); }
   return '#' + p.toString();
@@ -132,7 +163,7 @@ export function decodeHash(hash: string): ViewState {
     k: p.has('k') ? Number(p.get('k')) : undefined,
     cap: p.has('cap') ? Number(p.get('cap')) : undefined,
     neff: p.has('ne') ? p.get('ne') === '1' : undefined,
-    density: p.has('ln') ? Number(p.get('ln')) : undefined,
+    seeds: decodeSeeds(p),
     offsets: p.has('po') ? (([XY, XZ, YZ]) => ({ XY, XZ, YZ }))(p.get('po')!.split('~').map(Number)) : undefined,
   };
   const out = { ...DEFAULT_STATE } as Record<string, unknown>;

@@ -199,8 +199,8 @@ export class SceneView {
     this.requestRender();
   }
 
-  /** Flow or field lines (physics coordinates), or null to hide them. */
-  setLines(kind: 'flow' | 'field', p: { points: Float32Array; offsets: Uint32Array } | null) {
+  /** Flow or field lines (physics coordinates) with their dotted seeds, or null to hide them. */
+  setLines(kind: 'flow' | 'field', p: { points: Float32Array; offsets: Uint32Array; seeds?: Float32Array } | null) {
     (kind === 'flow' ? this.flowLines : this.fieldLines).set(p);
     this.requestRender();
   }

@@ -6,6 +6,7 @@ import type { Plane, PlaneOffsets } from '../core/knnField';
 import type { Selection } from '../core/atlas';
 import type { FrameName, QuantityName } from '../core/grid';
 import type { Stat } from '../core/compute';
+import type { Seeding } from '../core/lines';
 
 export const PROFILE_THETA_MAX = 30;
 
@@ -123,14 +124,15 @@ const linesTimer: Partial<Record<LineKind, ReturnType<typeof setTimeout>>> = {};
 /** Flow or field lines for the current parameters; debounced, the latest request per kind wins. A missing
  * vector atlas only affects the lines (linesError), not the maps. */
 export function runLines(kind: LineKind, frame: FrameName, selection: Selection, k: number, cap: number,
-  density: number, depth: number) {
+  seeding: Seeding) {
   if (!linesWorker) return;
-  const snap = $state.snapshot(selection);
+  // read synchronously, so the calling effect tracks every field of the selection and the seeding
+  const snap = $state.snapshot(selection), seed = $state.snapshot(seeding);
   stats.linesPending[kind] = true;
   clearTimeout(linesTimer[kind]);
   linesTimer[kind] = setTimeout(async () => {
     const id = (latestLines[kind] = nextId);
-    const r = await sendLines({ type: 'lines', kind, frame, selection: snap, k, cap, density, depth });
+    const r = await sendLines({ type: 'lines', kind, frame, selection: snap, k, cap, seeding: seed });
     if (id !== latestLines[kind] || r.type === 'superseded') return;
     stats.linesPending[kind] = false;
     if (r.type === 'lines') { stats.lines[kind] = r; stats.linesError = ''; }

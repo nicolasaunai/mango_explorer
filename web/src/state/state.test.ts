@@ -41,12 +41,26 @@ describe('URL state', () => {
     expect(s.layers).toEqual(['mp', 'bs', 'slice']);
     expect(decodeHash('#f=PGSM').frame).toBe('PGSM');
   });
-  it('line layers and density round-trip, density only when not default', () => {
-    const s = { ...DEFAULT_STATE, layers: ['mp', 'flow', 'field'] as typeof DEFAULT_STATE.layers, density: 220 };
+  it('line layers and seeding round-trip, seeding only when not default', () => {
+    const s = { ...DEFAULT_STATE, layers: ['mp', 'flow', 'field'] as typeof DEFAULT_STATE.layers,
+      seeds: { flow: { mode: 'plane' as const, plane: 'YZ' as const, offset: 8.5, n: 220 }, field: { ...DEFAULT_STATE.seeds.field, n: 300 } } };
     expect(decodeHash(encodeHash(s))).toEqual(s);
-    expect(encodeHash(DEFAULT_STATE)).not.toContain('ln=');
-    expect(decodeHash('#ln=9999').density).toBe(DEFAULT_STATE.density);
+    expect(encodeHash(DEFAULT_STATE)).not.toMatch(/(sv|sb|ln)=/);
+    expect(encodeHash({ ...DEFAULT_STATE, seeds: { ...DEFAULT_STATE.seeds, field: s.seeds.flow } })).not.toContain('sv=');
     expect(DEFAULT_STATE.layers).not.toContain('flow');
+    expect(DEFAULT_STATE.seeds.flow.mode).toBe('volume');
+  });
+  it('invalid seeding falls back to the default of that kind only', () => {
+    const s = decodeHash('#sv=plane~XW~0~150&sb=plane~XY~-4~100');
+    expect(s.seeds.flow).toEqual(DEFAULT_STATE.seeds.flow);
+    expect(s.seeds.field).toEqual({ mode: 'plane', plane: 'XY', offset: -4, n: 100 });
+    expect(decodeHash('#sv=plane~XZ~99~150').seeds.flow).toEqual(DEFAULT_STATE.seeds.flow);
+  });
+  it('old links: the line count `ln` sets both kinds', () => {
+    const s = decodeHash('#ln=220');
+    expect(s.seeds.flow).toEqual({ ...DEFAULT_STATE.seeds.flow, n: 220 });
+    expect(s.seeds.field).toEqual({ ...DEFAULT_STATE.seeds.field, n: 220 });
+    expect(decodeHash('#ln=9999').seeds).toEqual(DEFAULT_STATE.seeds);
   });
 });
 

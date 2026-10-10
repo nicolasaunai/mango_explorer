@@ -1,31 +1,63 @@
-// Flow lines and magnetic field lines: automatic seeds, a lazily evaluated lattice field, RK4 tracing.
+// Flow lines and magnetic field lines: seeds through the sheath or on a plane, a lazily evaluated lattice field, RK4 tracing.
 // Positions are normalized frame coordinates (R_E); the field comes from the vector voxel k-NN.
 import type { Boundaries } from './geometry';
 import { normalizedCoords } from './geometry';
 import { positionAt } from './knn';
+import { planePoint, type Plane } from './knnField';
 
 export type Vec3 = [number, number, number];
 export type VectorField = (p: Vec3) => Vec3 | null;
 export type TraceOptions = { step: number; maxSteps: number; inside: (p: Vec3) => boolean };
 export type Polylines = { points: Float32Array; offsets: Uint32Array };
 
-export const LINE = { step: 0.1, maxSteps: 600, lattice: 0.5, flowDepth: 0.95, flowThetaMax: 60, fieldThetaMax: 120,
-  fieldDepthMin: 0.03, fieldDepthMax: 0.97 };
-const GOLDEN = Math.PI * (3 - Math.sqrt(5));
+export const LINE = { step: 0.1, maxSteps: 600, lattice: 0.5, thetaMax: 120, seedDepthMin: 0.03, seedDepthMax: 0.97,
+  /** half-width (R_E) of the square searched for plane seeds, and the step of the area estimate */
+  planeHalf: 50, planeProbe: 0.25 };
 
-/** n points on the shell at depth d for theta in [0, thetaMax], evenly spread in solid angle (golden spiral). */
-export function seeds(n: number, d: number, thetaMaxDeg: number, b: Boundaries): Vec3[] {
-  const cMin = Math.cos((thetaMaxDeg * Math.PI) / 180), out: Vec3[] = [];
-  for (let i = 0; i < n; i++) {
-    const c = 1 - ((1 - cMin) * (i + 0.5)) / n;
-    out.push(positionAt(d, (Math.acos(c) * 180) / Math.PI, (((i * GOLDEN) % (2 * Math.PI)) * 180) / Math.PI, b));
+/** Where the lines of one kind start: spread through the sheath, or on a grid over a plane (XY at Z = offset,
+ * XZ at Y = offset, YZ at X = offset, like the slices). n: the number of seeds wanted. */
+export type Seeding = { mode: 'volume' | 'plane'; plane: Plane; offset: number; n: number };
+
+/** i-th term of the van der Corput sequence in a base: a fixed, evenly spread sequence in [0, 1). */
+function radicalInverse(i: number, base: number) {
+  let f = 1, r = 0;
+  for (let k = i; k > 0; k = Math.floor(k / base)) { f /= base; r += f * (k % base); }
+  return r;
+}
+
+/** n seeds spread evenly in depth D (kept off the boundaries, where a line would stop at once) and in solid
+ * angle for theta < thetaMax (Halton sequence, bases 2, 3, 5: always the same seeds). */
+export function volumeSeeds(n: number, b: Boundaries): Vec3[] {
+  const cMin = Math.cos((LINE.thetaMax * Math.PI) / 180), out: Vec3[] = [];
+  for (let i = 1; i <= n; i++) {
+    const d = LINE.seedDepthMin + (LINE.seedDepthMax - LINE.seedDepthMin) * radicalInverse(i, 2);
+    const c = 1 - (1 - cMin) * radicalInverse(i, 3);
+    out.push(positionAt(d, (Math.acos(c) * 180) / Math.PI, 360 * radicalInverse(i, 5), b));
   }
   return out;
 }
-export const flowSeeds = (n: number, b: Boundaries) => seeds(n, LINE.flowDepth, LINE.flowThetaMax, b);
-/** Field seeds on the shell at depth d, kept off the boundaries (a seed at D = 0 or 1 would stop at once). */
-export const fieldSeeds = (n: number, d: number, b: Boundaries) =>
-  seeds(n, Math.min(LINE.fieldDepthMax, Math.max(LINE.fieldDepthMin, d)), LINE.fieldThetaMax, b);
+
+/** About n seeds on a square grid over the part of the plane inside the sheath (same depth and theta limits as
+ * volume seeds). The spacing comes from the area of that part, estimated on a fine grid. */
+export function planeSeeds(n: number, plane: Plane, offset: number, b: Boundaries): Vec3[] {
+  const inside = (p: Vec3) => {
+    const c = normalizedCoords(p, b);
+    return c.d >= LINE.seedDepthMin && c.d <= LINE.seedDepthMax && c.thetaDeg < LINE.thetaMax;
+  };
+  const grid = (h: number) => {
+    const m = Math.floor(LINE.planeHalf / h), out: Vec3[] = [];
+    for (let i = -m; i <= m; i++) for (let j = -m; j <= m; j++) {
+      const p = planePoint(plane, (i + 0.5) * h, (j + 0.5) * h, offset);
+      if (inside(p)) out.push(p);
+    }
+    return out;
+  };
+  const area = grid(LINE.planeProbe).length * LINE.planeProbe ** 2;
+  return area > 0 ? grid(Math.max(LINE.planeProbe, Math.sqrt(area / n))) : [];
+}
+
+export const seedsFor = (s: Seeding, b: Boundaries) =>
+  s.mode === 'volume' ? volumeSeeds(s.n, b) : planeSeeds(s.n, s.plane, s.offset, b);
 
 /** `evaluate` on a cubic lattice of spacing h, computed on first use, interpolated trilinearly. */
 export function latticeField(evaluate: VectorField, h = LINE.lattice): VectorField & { evaluations(): number } {
@@ -54,7 +86,7 @@ export function latticeField(evaluate: VectorField, h = LINE.lattice): VectorFie
 }
 
 /** True inside the magnetosheath (0 <= D <= 1) and below thetaMax. */
-export function insideSheath(b: Boundaries, thetaMaxDeg = LINE.fieldThetaMax) {
+export function insideSheath(b: Boundaries, thetaMaxDeg = LINE.thetaMax) {
   return (p: Vec3) => { const n = normalizedCoords(p, b); return n.d >= 0 && n.d <= 1 && n.thetaDeg < thetaMaxDeg; };
 }
 
