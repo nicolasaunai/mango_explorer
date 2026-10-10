@@ -1,0 +1,176 @@
+// Everything a view depends on, serialized in the URL hash so a link reproduces the view.
+import { z } from 'zod';
+import { grid, type QuantityName } from '../core/grid';
+import { mod } from '../core/frames';
+import { LUT_NAMES, type LutName } from '../render/lut';
+
+const bins = (n: number) => z.array(z.number().int().min(0).max(n - 1)).min(1);
+const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+export const N_CLOCK = grid.conditionEdges('clock_deg').length - 1;
+export const N_CONE = grid.conditionEdges('cone_deg').length - 1;
+export const N_MA = grid.conditionEdges('Ma_sw').length - 1;
+
+export const VIEWS = ['iso', 'sun', 'dusk', 'north', 'tail'] as const;
+export const STATS = ['median', 'q25', 'q75', 'iqr_rel', 'n', 'neff', 'wmean', 'mean'] as const;
+/** Statistics offered per source: k-NN means use the full data (voxel sums). */
+export const STATS_FOR = {
+  bins: ['median', 'q25', 'q75', 'iqr_rel', 'n', 'neff'],
+  knn: ['wmean', 'mean', 'median', 'q25', 'q75'],
+} as const;
+export const PLANES = ['XY', 'XZ', 'YZ'] as const;
+export const LAYERS = ['mp', 'bs', 'tint', 'shells', 'slice', 'flow', 'field'] as const;
+
+/** Seeds of one kind of line: spread through the sheath, or on a plane of its own (see core/lines Seeding). */
+const Seeding = z.object({
+  mode: z.enum(['volume', 'plane']),
+  plane: z.enum(PLANES),
+  offset: z.number().min(-30).max(30),
+  n: z.number().int().min(50).max(400),
+});
+
+export const ViewState = z.object({
+  frame: z.enum(['GSM', 'PGSM']),
+  /** GSM: IMF clock sectors that filter the data */
+  clock: bins(N_CLOCK),
+  /** PGSM: the one target IMF clock angle, degrees in [0, 360) */
+  clockDeg: z.number().int().min(0).max(359),
+  cone: bins(N_CONE),
+  ma: bins(N_MA),
+  quantity: z.enum(grid.quantityNames as [QuantityName, ...QuantityName[]]),
+  stat: z.enum(STATS),
+  planes: z.array(z.enum(PLANES)),
+  view: z.enum(VIEWS),
+  layers: z.array(z.enum(LAYERS)),
+  lut: z.enum(LUT_NAMES as [LutName, ...LutName[]]),
+  /** depth D_msh of the shell shown in 3D and on the theta-phi map: 0 magnetopause, 1 bow shock */
+  depth: z.number().min(0).max(1),
+  probe: z.number().int().min(-1).max(grid.nCells - 1),
+  range: z.tuple([z.number(), z.number()]).nullable(),
+  pinA: z.object({ clock: bins(N_CLOCK), cone: bins(N_CONE), ma: bins(N_MA) }).nullable(),
+  cmp: z.enum(['A', 'B', 'diff']),
+  source: z.enum(['bins', 'knn']),
+  k: z.number().int().min(1),
+  cap: z.number().min(0.25).max(10),
+  neff: z.boolean(),
+  /** where the flow lines and the field lines start, each kind its own */
+  seeds: z.object({ flow: Seeding, field: Seeding }),
+  /** slice positions along their normals, R_E: XY at Z, XZ at Y, YZ at X */
+  offsets: z.object({ XY: z.number().min(-40).max(40), XZ: z.number().min(-40).max(40), YZ: z.number().min(-40).max(40) }),
+});
+export type ViewState = z.infer<typeof ViewState>;
+
+/** Landing view chosen by the physics panel: Parker-spiral IMF, PGSM, density compression. */
+export const DEFAULT_STATE: ViewState = {
+  frame: 'PGSM',
+  clock: range(N_CLOCK),
+  clockDeg: 0,
+  cone: [2, 3],
+  ma: [2, 3],
+  quantity: 'Np_ratio',
+  stat: 'median',
+  planes: ['XZ'],
+  view: 'iso',
+  layers: ['mp', 'bs', 'tint', 'slice'],
+  lut: 'batlow',
+  depth: 0.55,
+  probe: -1,
+  range: null,
+  pinA: null,
+  cmp: 'B',
+  source: 'bins',
+  k: grid.raw.knn.k,
+  cap: grid.raw.knn.cap_re,
+  neff: grid.raw.neff.overlay_default,
+  seeds: {
+    flow: { mode: 'volume', plane: 'XZ', offset: 0, n: 150 },
+    field: { mode: 'volume', plane: 'XZ', offset: 0, n: 150 },
+  },
+  offsets: { XY: 0, XZ: 0, YZ: 0 },
+};
+
+export const PRESETS: { id: string; label: string; hint: string; state: Partial<ViewState> }[] = [
+  { id: 'parker', label: 'Parker spiral', hint: 'cone 30–60°, M_A 6–12', state: { clock: range(N_CLOCK), cone: [2, 3], ma: [2, 3] } },
+  { id: 'north', label: 'Northward', hint: 'clock 0° (GSM: 330–30°), cone 60–120°, M_A < 8', state: { clock: [11, 0], clockDeg: 0, cone: [4, 5, 6, 7], ma: [0, 1, 2] } },
+  { id: 'south', label: 'Southward', hint: 'clock 180° (GSM: 150–210°), cone 45–135°', state: { clock: [5, 6], clockDeg: 180, cone: [3, 4, 5, 6, 7, 8], ma: range(N_MA) } },
+  { id: 'radial', label: 'Radial IMF', hint: 'cone < 30° or > 150°', state: { clock: range(N_CLOCK), cone: [0, 1, 10, 11], ma: range(N_MA) } },
+  { id: 'lowmach', label: 'Low Mach', hint: 'M_A < 4', state: { clock: range(N_CLOCK), cone: range(N_CONE), ma: [0] } },
+];
+
+/** A typed clock angle as a whole degree in [0, 360), or undefined when it is not a number. */
+const wrapClock = (s: string | null) => {
+  const x = s === null ? NaN : Number(s);
+  return Number.isFinite(x) ? mod(Math.round(x), 360) : undefined;
+};
+
+/** Old links stored the shell as a depth bin index. */
+const binCentre = (i: number) => (Number.isInteger(i) && i >= 0 && i < grid.dEdges.length - 1 ? (grid.dEdges[i] + grid.dEdges[i + 1]) / 2 : undefined);
+
+/** URL keys of the seeding: V (flow) and B (field) lines, as mode~plane~offset~n. */
+const SEED_KEYS = [['flow', 'sv'], ['field', 'sb']] as const;
+
+/** Each kind from its key, else its default; old links only had a line count `ln` shared by both kinds. */
+function decodeSeeds(p: URLSearchParams): ViewState['seeds'] {
+  const old = Seeding.shape.n.safeParse(p.has('ln') ? Number(p.get('ln')) : undefined);
+  const out = { ...DEFAULT_STATE.seeds };
+  for (const [kind, key] of SEED_KEYS) {
+    const fallback = old.success ? { ...DEFAULT_STATE.seeds[kind], n: old.data } : DEFAULT_STATE.seeds[kind];
+    const [mode, plane, offset, n] = (p.get(key) ?? '').split('~');
+    const r = Seeding.safeParse({ mode, plane, offset: Number(offset), n: Number(n) });
+    out[kind] = p.has(key) && r.success ? r.data : fallback;
+  }
+  return out;
+}
+
+const list = (a: number[]) => a.join('.');
+const unlist = (s: string | null) => (s ? s.split('.').filter(Boolean).map(Number) : undefined);
+
+export function encodeHash(s: ViewState): string {
+  const p = new URLSearchParams({
+    f: s.frame, clk: list(s.clock), ck: String(s.clockDeg), cone: list(s.cone), ma: list(s.ma),
+    q: s.quantity, st: s.stat, pl: s.planes.join('.'), v: s.view, ly: s.layers.join('.'),
+    cm: s.lut, d: String(+s.depth.toFixed(3)),
+  });
+  if (s.probe >= 0) p.set('pr', String(s.probe));
+  if (s.range) p.set('cr', s.range.map((x) => +x.toPrecision(5)).join('~'));
+  if (s.offsets.XY || s.offsets.XZ || s.offsets.YZ) p.set('po', [s.offsets.XY, s.offsets.XZ, s.offsets.YZ].map((x) => +x.toFixed(2)).join('~'));
+  if (s.neff !== DEFAULT_STATE.neff) p.set('ne', s.neff ? '1' : '0');
+  for (const [kind, key] of SEED_KEYS) {
+    const v = s.seeds[kind], d = DEFAULT_STATE.seeds[kind];
+    if (v.mode !== d.mode || v.plane !== d.plane || v.offset !== d.offset || v.n !== d.n)
+      p.set(key, [v.mode, v.plane, +v.offset.toFixed(2), v.n].join('~'));
+  }
+  if (s.source === 'knn') { p.set('src', 'knn'); p.set('k', String(s.k)); p.set('cap', String(s.cap)); }
+  if (s.pinA) { p.set('pa', [s.pinA.clock, s.pinA.cone, s.pinA.ma].map(list).join('~')); p.set('cmp', s.cmp); }
+  return '#' + p.toString();
+}
+
+/** Parse a hash; anything missing or invalid falls back to the default for that field. */
+export function decodeHash(hash: string): ViewState {
+  const p = new URLSearchParams(hash.replace(/^#/, ''));
+  const candidate = {
+    frame: ((f) => (f === 'PGSM_fold' ? 'PGSM' : f))(p.get('f')) ?? undefined,
+    clock: unlist(p.get('clk')), clockDeg: wrapClock(p.get('ck')), cone: unlist(p.get('cone')),
+    ma: unlist(p.get('ma')), quantity: p.get('q') ?? undefined, stat: p.get('st') ?? undefined,
+    planes: p.has('pl') ? (p.get('pl') || '').split('.').filter(Boolean) : undefined, view: p.get('v') ?? undefined,
+    layers: p.has('ly') ? (p.get('ly') || '').split('.').filter((l) => (LAYERS as readonly string[]).includes(l)) : undefined,
+    lut: p.get('cm') ?? undefined,
+    depth: p.has('d') ? Number(p.get('d')) : p.has('sh') ? binCentre(Number(p.get('sh'))) : undefined,
+    probe: p.has('pr') ? Number(p.get('pr')) : undefined,
+    range: p.has('cr') ? p.get('cr')!.split('~').map(Number) : undefined,
+    pinA: p.has('pa') ? (([clock, cone, ma]) => ({ clock: unlist(clock), cone: unlist(cone), ma: unlist(ma) }))(p.get('pa')!.split('~')) : undefined,
+    cmp: p.get('cmp') ?? undefined,
+    source: p.get('src') ?? undefined,
+    k: p.has('k') ? Number(p.get('k')) : undefined,
+    cap: p.has('cap') ? Number(p.get('cap')) : undefined,
+    neff: p.has('ne') ? p.get('ne') === '1' : undefined,
+    seeds: decodeSeeds(p),
+    offsets: p.has('po') ? (([XY, XZ, YZ]) => ({ XY, XZ, YZ }))(p.get('po')!.split('~').map(Number)) : undefined,
+  };
+  const out = { ...DEFAULT_STATE } as Record<string, unknown>;
+  for (const [k, v] of Object.entries(candidate)) {
+    if (v === undefined) continue;
+    const r = ViewState.shape[k as keyof ViewState].safeParse(v);
+    if (r.success) out[k] = r.data;
+  }
+  return out as ViewState;
+}

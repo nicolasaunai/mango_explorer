@@ -1,0 +1,1 @@
+export { DISPLAY_BOUNDARIES as BOUNDARIES, DISPLAY_NOTE as BOUNDARY_NOTE } from '../core/display';
