@@ -1,0 +1,251 @@
+"""On-disk atlas: a manifest.json plus little-endian binary files the browser reads directly.
+
+Each binary file is a concatenation of typed sections; the manifest records every section's
+name, dtype, length and byte offset. Sections are ordered by item size (4, 2, 1 bytes) so each
+one stays naturally aligned for a JS TypedArray view.
+"""
+from __future__ import annotations
+
+import json
+from datetime import UTC, datetime
+from pathlib import Path
+
+import numpy as np
+
+from mango_explorer.atlas.cube import CubeData
+from mango_explorer.atlas.grid import Grid, load_grid
+
+_JS_TYPES = {"uint32": "Uint32Array", "int32": "Int32Array", "uint16": "Uint16Array",
+             "uint8": "Uint8Array", "float32": "Float32Array"}
+
+
+def _write_sections(path: Path, sections: list[tuple[str, np.ndarray]]) -> list[dict]:
+    meta, offset = [], 0
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as f:
+        for name, arr in sorted(sections, key=lambda s: -s[1].dtype.itemsize):
+            arr = np.ascontiguousarray(arr, dtype=arr.dtype.newbyteorder("<"))
+            f.write(arr.tobytes())
+            meta.append({"name": name, "dtype": arr.dtype.name, "length": int(arr.size),
+                         "offset": offset})
+            offset += arr.nbytes
+    return meta
+
+
+def _read_sections(path: Path, meta: list[dict]) -> dict[str, np.ndarray]:
+    raw = path.read_bytes()
+    if path.suffix == ".gz":
+        import gzip
+
+        raw = gzip.decompress(raw)
+    return {s["name"]: np.frombuffer(raw, dtype=np.dtype(s["dtype"]).newbyteorder("<"),
+                                     count=s["length"], offset=s["offset"]) for s in meta}
+
+
+def _split_cell_keys(keys: np.ndarray, n_cells: int, n_cond: int):
+    cond = keys // n_cells
+    offsets = np.searchsorted(cond, np.arange(n_cond + 1)).astype(np.uint32)
+    return offsets, (keys % n_cells).astype(np.uint16)
+
+
+def write_cube(root: Path, cube: CubeData) -> dict:
+    g = cube.grid
+    nc, nb, ncond = g.n_cells, g.n_hist, cube.n_conditions
+    base = Path("cubes") / cube.cube_id / cube.frame
+    entry = {"id": cube.cube_id, "frame": cube.frame, "dims": list(cube.dims),
+             "shape": list(cube.shape), "quantities": {}}
+    for q, (keys, counts) in cube.hist.items():
+        cond = keys // (nc * nb)
+        offsets = np.searchsorted(cond, np.arange(ncond + 1)).astype(np.uint32)
+        rel = base / f"{q}.bin"
+        entry["quantities"][q] = {"path": rel.as_posix(), "sections": _write_sections(root / rel, [
+            ("cond_offsets", offsets),
+            ("count", counts.astype(np.uint32)),
+            ("cell", ((keys // nb) % nc).astype(np.uint16)),
+            ("hbin", (keys % nb).astype(np.uint8)),
+        ])}
+    s_off, s_cell = _split_cell_keys(cube.samples[0], nc, ncond)
+    e_off, e_cell = _split_cell_keys(cube.neff[0], nc, ncond)
+    rel = base / "counts.bin"
+    entry["counts"] = {"path": rel.as_posix(), "sections": _write_sections(root / rel, [
+        ("n_cond_offsets", s_off), ("n", cube.samples[1].astype(np.uint32)), ("n_cell", s_cell),
+        ("neff_cond_offsets", e_off), ("neff", cube.neff[1].astype(np.uint32)),
+        ("neff_cell", e_cell),
+    ])}
+    n_sc = len(g.spacecraft)
+    keys, counts = cube.by_sc
+    cc = keys // n_sc
+    rel = base / "spacecraft.bin"
+    entry["spacecraft"] = {"path": rel.as_posix(), "names": list(g.spacecraft),
+                           "sections": _write_sections(root / rel, [
+        ("cond_offsets", np.searchsorted(cc // nc, np.arange(ncond + 1)).astype(np.uint32)),
+        ("n", counts.astype(np.uint32)),
+        ("cell", (cc % nc).astype(np.uint16)),
+        ("sc", (keys % n_sc).astype(np.uint8)),
+    ])}
+    return entry
+
+
+def read_cube(root: Path, entry: dict, grid: Grid) -> CubeData:
+    nc, nb = grid.n_cells, grid.n_hist
+
+    def keys_from(offsets, cell):
+        cond = np.repeat(np.arange(len(offsets) - 1), np.diff(offsets.astype(np.int64)))
+        return cond * nc + cell.astype(np.int64)
+
+    hist = {}
+    for q, f in entry["quantities"].items():
+        s = _read_sections(root / f["path"], f["sections"])
+        cc = keys_from(s["cond_offsets"], s["cell"])
+        hist[q] = (cc * nb + s["hbin"].astype(np.int64), s["count"].astype(np.int64))
+    s = _read_sections(root / entry["counts"]["path"], entry["counts"]["sections"])
+    sc = _read_sections(root / entry["spacecraft"]["path"], entry["spacecraft"]["sections"])
+    n_sc = len(grid.spacecraft)
+    by_sc = (keys_from(sc["cond_offsets"], sc["cell"]) * n_sc + sc["sc"].astype(np.int64),
+             sc["n"].astype(np.int64))
+    return CubeData(
+        grid=grid, cube_id=entry["id"], frame=entry["frame"], hist=hist,
+        samples=(keys_from(s["n_cond_offsets"], s["n_cell"]), s["n"].astype(np.int64)),
+        neff=(keys_from(s["neff_cond_offsets"], s["neff_cell"]), s["neff"].astype(np.int64)),
+        by_sc=by_sc,
+    )
+
+
+def write_samples(root: Path, table: dict[str, np.ndarray], frame: str, cube_id: str, fraction: float) -> dict:
+    """One frame's k-NN sample table: base geometry in one file, one float32 file per quantity."""
+    base = {k: v for k, v in table.items() if not k.startswith("q:")}
+    rel = f"samples/{frame}/base.bin"
+    entry = {"frame": frame, "cube": cube_id, "fraction": fraction, "n": len(table["x"]),
+             "base": {"path": rel, "sections": _write_sections(root / rel, list(base.items()))}, "quantities": {}}
+    for k, v in table.items():
+        if k.startswith("q:"):
+            rel = f"samples/{frame}/{k[2:]}.bin"
+            entry["quantities"][k[2:]] = {"path": rel, "sections": _write_sections(root / rel, [("value", v)])}
+    return entry
+
+
+def write_hours(root: Path, frame: str, hours: dict[str, np.ndarray]) -> dict:
+    rel = f"hours/{frame}.bin"
+    return {"frame": frame, "path": rel, "n_rows": len(hours["n"]),
+            "sections": _write_sections(root / rel, list(hours.items()))}
+
+
+def write_voxels(root: Path, vox: dict) -> dict:
+    base = Path("voxels") / vox["frame"]
+    entry = {"frame": vox["frame"], "base": {"path": (base / "base.bin").as_posix(),
+             "sections": _write_sections(root / base / "base.bin", list(vox["base"].items()))}, "quantities": {}}
+    for q, arrays in vox["quantities"].items():
+        rel = base / f"{q}.bin"
+        entry["quantities"][q] = {"path": rel.as_posix(), "sections": _write_sections(root / rel, list(arrays.items()))}
+    return entry
+
+
+def read_voxels(root: Path, entry: dict) -> tuple[dict, dict]:
+    root = Path(root)
+    base = dict(_read_sections(root / entry["base"]["path"], entry["base"]["sections"]))
+    quantities = {q: dict(_read_sections(root / f["path"], f["sections"])) for q, f in entry["quantities"].items()}
+    return base, quantities
+
+
+def read_samples(root: Path, entry: dict) -> dict[str, np.ndarray]:
+    root = Path(root)
+    out = dict(_read_sections(root / entry["base"]["path"], entry["base"]["sections"]))
+    for q, f in entry["quantities"].items():
+        out[f"q:{q}"] = _read_sections(root / f["path"], f["sections"])["value"]
+    return out
+
+
+def write_atlas(root: Path, grid: Grid, parts: list[dict], info: dict, fraction: float) -> dict:
+    """`parts`: one dict per frame with keys frame, cube (CubeData), hours, samples (table), voxels."""
+    root = Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "format": "mango-atlas/2",
+        "grid": grid.version,
+        "created": datetime.now(UTC).isoformat(timespec="seconds"),
+        **info,
+        "hours": [write_hours(root, p["frame"], p["hours"]) for p in parts],
+        "cubes": [write_cube(root, p["cube"]) for p in parts],
+        "samples": [write_samples(root, p["samples"], p["frame"], p["cube"].cube_id, fraction) for p in parts],
+        "voxels": {"size_re": grid.raw["voxels"]["size_re"], "frames": [write_voxels(root, p["voxels"]) for p in parts]},
+        "js_types": _JS_TYPES,
+    }
+    (root / "manifest.json").write_text(json.dumps(manifest, indent=1))
+    return manifest
+
+
+def pack_atlas(src: Path, dst: Path, sample_fraction: float | None = None) -> dict:
+    """Copy an atlas with every binary file gzipped (``.bin.gz``) for static hosting.
+
+    The browser decompresses these itself, so the host needs no special configuration.
+    `sample_fraction` (of the full data) thins the k-NN sample table further, e.g. 0.03 for a
+    website from a 0.1 build; the voxel sums always keep the full data.
+    """
+    import gzip
+    import shutil
+
+    src, dst = Path(src), Path(dst)
+    manifest = json.loads((src / "manifest.json").read_text())
+    if dst.exists():
+        shutil.rmtree(dst)
+
+    def pack(entry: dict) -> None:
+        data = (Path(entry.pop("_root", src)) / entry["path"]).read_bytes()
+        entry["path"] += ".gz"
+        out = dst / entry["path"]
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(gzip.compress(data, compresslevel=9, mtime=0))
+
+    if sample_fraction is not None:
+        manifest["samples"] = [_thin_samples(src, e, sample_fraction) for e in manifest["samples"]]
+    for h in manifest["hours"]:
+        pack(h)
+    for cube in manifest["cubes"]:
+        for f in cube["quantities"].values():
+            pack(f)
+        pack(cube["counts"])
+        if "spacecraft" in cube:
+            pack(cube["spacecraft"])
+    for v in manifest.get("voxels", {}).get("frames", []):
+        pack(v["base"])
+        for f in v["quantities"].values():
+            pack(f)
+    for e in manifest["samples"]:
+        pack(e["base"])
+        for f in e["quantities"].values():
+            pack(f)
+    manifest["encoding"] = "gzip"
+    (dst / "manifest.json").write_text(json.dumps(manifest, indent=1))
+    return manifest
+
+
+def _thin_samples(src: Path, entry: dict, fraction: float) -> dict:
+    """Rewrite one frame's sample table (in a temporary copy) keeping a random subset of its rows."""
+    import tempfile
+
+    if fraction >= entry["fraction"]:
+        return entry
+    table = read_samples(src, entry)
+    keep = np.random.default_rng(0).random(len(table["x"])) < fraction / entry["fraction"]
+    off = table["cond_offsets"].astype(np.int64)
+    cond = np.repeat(np.arange(len(off) - 1), np.diff(off))[keep]
+    new = {k: v[keep] for k, v in table.items() if k != "cond_offsets"}
+    new["cond_offsets"] = np.searchsorted(cond, np.arange(len(off))).astype(np.uint32)
+    tmp = Path(tempfile.mkdtemp())
+    thinned = write_samples(tmp, new, entry["frame"], entry["cube"], fraction)
+    for f in [thinned["base"], *thinned["quantities"].values()]:
+        f["_root"] = str(tmp)  # pack reads these files from the temporary copy
+    return thinned
+
+
+def read_atlas(root: Path):
+    root = Path(root)
+    manifest = json.loads((root / "manifest.json").read_text())
+    current = load_grid().version
+    if manifest.get("format") != "mango-atlas/2" or manifest.get("grid") != current:
+        raise ValueError(f"this atlas is {manifest.get('format')}/{manifest.get('grid')}; "
+                         f"the explorer needs mango-atlas/2 built on {current}: rebuild it")
+    grid = load_grid(manifest["grid"])
+    cubes = [read_cube(root, e, grid) for e in manifest["cubes"]]
+    hours = {h["frame"]: _read_sections(root / h["path"], h["sections"]) for h in manifest["hours"]}
+    return manifest, cubes, hours

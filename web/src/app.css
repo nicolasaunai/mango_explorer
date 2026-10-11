@@ -1,0 +1,40 @@
+/* Dark-first "magnetogram" palette, light "logbook" palette for slides and papers.
+   Colour is reserved for the two boundaries; the chrome stays neutral. */
+:root {
+  --bg: #0A0E13; --panel: #111821; --rule: #243040; --fg: #D7DEE6; --muted: #8B98A6;
+  --mp: #4FD1E8; --bs: #F2A541; --qpar: #E58467; --qperp: #7FA0D0; --approx: #E8C547; --hatch: #3A4655;
+  --chip: #18212C; --screen: #0A0E13;
+  --f-display: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+  --f-body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --bg: #F1F4F6; --panel: #FFFFFF; --rule: #D3DAE1; --fg: #15202B; --muted: #596775;
+    --mp: #0E7891; --bs: #B0611B; --qpar: #BF5539; --qperp: #3D5E8C; --approx: #8A6E00; --hatch: #BCC5CE;
+    --chip: #E6ECF1; color-scheme: light;
+  }
+}
+:root[data-theme='light'] {
+  --bg: #F1F4F6; --panel: #FFFFFF; --rule: #D3DAE1; --fg: #15202B; --muted: #596775;
+  --mp: #0E7891; --bs: #B0611B; --qpar: #BF5539; --qperp: #3D5E8C; --approx: #8A6E00; --hatch: #BCC5CE;
+  --chip: #E6ECF1; color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.5 var(--f-body); }
+.eyebrow { font: 11px var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.chip { font: 11.5px var(--f-mono); padding: 3px 8px; border-radius: 999px; border: 1px solid var(--rule);
+  background: transparent; color: var(--fg); cursor: pointer; }
+.chip:hover { border-color: var(--mp); }
+.chip[aria-pressed='true'] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.seg { display: flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.seg button { flex: 1; font: 12px var(--f-mono); padding: 5px 10px; border: 0; border-right: 1px solid var(--rule);
+  background: transparent; color: var(--fg); cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed='true'] { background: var(--fg); color: var(--bg); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--mp); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

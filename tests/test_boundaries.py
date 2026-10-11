@@ -90,3 +90,17 @@ def test_tessellate_subsolar_point_lies_on_x_axis():
     first_ring = pos[:8]
     np.testing.assert_allclose(first_ring[:, 0], 10.5, atol=1e-5)
     np.testing.assert_allclose(first_ring[:, 1:], 0.0, atol=1e-5)
+
+
+def test_jelinek_bs_matches_paraboloid_reference_values():
+    # r(θ) = 2 R Pd^(-1/ε) / (cos θ + sqrt(cos²θ + λ² sin²θ)), R=15.02, ε=6.55, λ=1.17
+    r0 = 15.02 * 2.0 ** (-1 / 6.55)
+    assert jelinek_bs(0.0, pd=2.0) == pytest.approx(r0, rel=1e-12)
+    assert jelinek_bs(np.pi / 2, pd=2.0) == pytest.approx(2 * r0 / 1.17, rel=1e-12)
+
+
+def test_jelinek_mp_inside_bs():
+    from mango_explorer.boundaries import jelinek_mp
+
+    theta = np.linspace(0, 2.0, 30)
+    assert np.all(jelinek_mp(theta, pd=2.0) < jelinek_bs(theta, pd=2.0))

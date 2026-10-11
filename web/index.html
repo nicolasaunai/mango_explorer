@@ -2,17 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>MANGO Explorer</title>
-    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,700..800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" />
   </head>
   <body>
-    <div id="loading">Loading Pyodide…</div>
-    <aside id="sidebar"></aside>
-    <main id="viewport">
-      <svg id="overlay"><line id="connector"/><circle id="dot" r="5"/></svg>
-      <div id="popup" hidden></div>
-      <div id="colorbar"></div>
-    </main>
-    <script type="module" src="/src/main.js"></script>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

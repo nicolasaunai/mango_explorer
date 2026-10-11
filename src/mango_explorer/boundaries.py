@@ -29,21 +29,32 @@ def shue_alpha(bz: float, pd: float) -> float:
     return (0.58 - 0.007 * bz) * (1.0 + 0.024 * np.log(pd))
 
 
-_JEL_LAMBDA = 15.02   # RE at 1 nPa, per Jelínek+2012 fit
-_JEL_EPS = 6.55       # pressure exponent
-_JEL_ALPHA = 0.78     # flaring exponent (verify against paper)
+# Jelínek, Němeček & Šafránková 2012 (10.1029/2011JA017252): surfaces of constant parabolic
+# coordinate, r = 2 R Pd^(-1/eps) / (cos θ + sqrt(cos²θ + λ² sin²θ)). Coefficients cross-checked
+# against the 2010 WDS proceedings and spok/models/planetary.py; the 2012 PDF itself was not read.
+_JEL_BS_R, _JEL_BS_EPS, _JEL_BS_LAMBDA = 15.02, 6.55, 1.17
+_JEL_MP_R, _JEL_MP_EPS, _JEL_MP_LAMBDA = 12.82, 5.26, 1.54
+
+
+def _jelinek_surface(theta, pd: float, r: float, eps: float, lam: float):
+    theta = np.asarray(theta, dtype=float)
+    c, s = np.cos(theta), np.sin(theta)
+    return 2.0 * r * pd ** (-1.0 / eps) / (c + np.sqrt(c * c + (lam * s) ** 2))
 
 
 def jelinek_r0(pd: float) -> float:
-    """Jelínek+2012 bow-shock subsolar standoff (RE) as a function of Pd_sw."""
-    return _JEL_LAMBDA * pd ** (-1.0 / _JEL_EPS)
+    """Jelínek+2012 bow-shock subsolar standoff (RE) as a function of Pd_sw (nPa)."""
+    return _JEL_BS_R * pd ** (-1.0 / _JEL_BS_EPS)
 
 
-def jelinek_bs(theta, pd: float, alpha: float = _JEL_ALPHA):
-    """Jelínek+2012 bow shock surface: r(theta)."""
-    theta = np.asarray(theta, dtype=float)
-    r0 = jelinek_r0(pd)
-    return r0 * (2.0 / (1.0 + np.cos(theta))) ** alpha
+def jelinek_bs(theta, pd: float):
+    """Jelínek+2012 bow shock r(theta), theta in radians from the Sun-Earth line."""
+    return _jelinek_surface(theta, pd, _JEL_BS_R, _JEL_BS_EPS, _JEL_BS_LAMBDA)
+
+
+def jelinek_mp(theta, pd: float):
+    """Jelínek+2012 magnetopause r(theta)."""
+    return _jelinek_surface(theta, pd, _JEL_MP_R, _JEL_MP_EPS, _JEL_MP_LAMBDA)
 
 
 def tessellate_surface(
